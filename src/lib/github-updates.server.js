@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { installStagedOutput } from "@/lib/update-output.server";
 
 const repository = process.env.GITHUB_REPOSITORY || "ricardomartinsdesigner-pixel/Novo-sistema-de-revelacao-paracolor";
 const releaseApi = `https://api.github.com/repos/${repository}/releases/latest`;
@@ -11,7 +12,7 @@ const stateRoot = process.env.UPDATE_STATE_DIR || path.join(process.cwd(), "data
 
 async function currentVersion() {
   try { return (await readFile(path.join(stateRoot, "current-version"), "utf8")).trim(); }
-  catch { return process.env.APP_VERSION || "1.0.2"; }
+  catch { return process.env.APP_VERSION || "1.0.3"; }
 }
 
 function version(tag) {
@@ -120,13 +121,7 @@ export async function installGithubUpdateVersion(versionTag) {
         return { ok: true, restarting: true, version: release.version };
       }
 
-      await rename(outputDir, backupDir);
-      try {
-        await rename(nextOutput, outputDir);
-      } catch (error) {
-        await rename(backupDir, outputDir).catch(() => {});
-        throw error;
-      }
+      await installStagedOutput(nextOutput, outputDir, backupDir);
       await writeFile(path.join(stateRoot, "current-version"), release.version, "utf8");
       setTimeout(() => process.exit(0), 700);
       return { ok: true, restarting: true, version: release.version };

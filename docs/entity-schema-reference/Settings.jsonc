@@ -1,0 +1,235 @@
+{
+  "name": "Settings",
+  "type": "object",
+  "properties": {
+    "store_name": {
+      "type": "string"
+    },
+    "logo_url": {
+      "type": "string"
+    },
+    "dark_mode_enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "whatsapp": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "instagram": {
+      "type": "string"
+    },
+    "hours": {
+      "type": "string"
+    },
+    "address": {
+      "type": "string"
+    },
+    "pickup_info": {
+      "type": "string"
+    },
+    "production_days": {
+      "type": "number"
+    },
+    "days_revelacao": {
+      "type": "number"
+    },
+    "days_polaroid": {
+      "type": "number"
+    },
+    "days_banner": {
+      "type": "number"
+    },
+    "days_personalizado": {
+      "type": "number"
+    },
+    "cutoff_hour": {
+      "type": "number",
+      "default": 17
+    },
+    "holidays": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "retention_days": {
+      "type": "number",
+      "default": 90
+    },
+    "retention_auto": {
+      "type": "boolean",
+      "default": true
+    },
+    "maintenance_enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "maintenance_title": {
+      "type": "string"
+    },
+    "maintenance_message": {
+      "type": "string"
+    },
+    "maintenance_return": {
+      "type": "string"
+    },
+    "shipping_enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "shipping_flat": {
+      "type": "number"
+    },
+    "hero_title": {
+      "type": "string"
+    },
+    "hero_subtitle": {
+      "type": "string"
+    },
+    "custom_banner_image": {
+      "type": "string"
+    },
+    "custom_banner_title": {
+      "type": "string"
+    },
+    "custom_banner_text": {
+      "type": "string"
+    },
+    "wa_template_arte": {
+      "type": "string"
+    },
+    "wa_template_contato": {
+      "type": "string"
+    },
+    "email_enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "email_from_name": {
+      "type": "string"
+    },
+    "email_reply_to": {
+      "type": "string"
+    },
+    "notify_order_created": {
+      "type": "boolean",
+      "default": true
+    },
+    "notify_payment_approved": {
+      "type": "boolean",
+      "default": true
+    },
+    "notify_art_ready": {
+      "type": "boolean",
+      "default": true
+    },
+    "notify_order_ready": {
+      "type": "boolean",
+      "default": true
+    },
+    "notify_shipped": {
+      "type": "boolean",
+      "default": true
+    },
+    "promo_home_enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "promo_studio_enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "promo_whatsapp_enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "promo_whatsapp_message": {
+      "type": "string"
+    },
+    "promo_interval_seconds": {
+      "type": "number",
+      "default": 6
+    },
+    "module_revelacao": {
+      "type": "boolean",
+      "default": true
+    },
+    "module_polaroids": {
+      "type": "boolean",
+      "default": true
+    },
+    "module_banners": {
+      "type": "boolean",
+      "default": true
+    },
+    "module_personalizados": {
+      "type": "boolean",
+      "default": true
+    },
+    "module_molduras": {
+      "type": "boolean",
+      "default": true
+    },
+    "module_simulador": {
+      "type": "boolean",
+      "default": true
+    },
+    "module_molduras_online": {
+      "type": "boolean",
+      "default": false
+    },
+    "module_aprovacao_whatsapp": {
+      "type": "boolean",
+      "default": true
+    },
+    "module_destaques": {
+      "type": "boolean",
+      "default": true
+    },
+    "module_promocoes": {
+      "type": "boolean",
+      "default": true
+    },
+    "module_servicos": {
+      "type": "boolean",
+      "default": true
+    },
+    "module_estudio": {
+      "type": "boolean",
+      "default": true
+    },
+    "module_destaque_estudio": {
+      "type": "boolean",
+      "default": true
+    },
+    "module_estacionamento": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "rls": {
+    "read": {},
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "required": []
+}

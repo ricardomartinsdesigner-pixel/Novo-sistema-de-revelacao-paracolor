@@ -1,0 +1,279 @@
+{
+  "name": "Order",
+  "type": "object",
+  "properties": {
+    "checkout_key": {
+      "type": "string"
+    },
+    "order_number": {
+      "type": "string"
+    },
+    "internal_number": {
+      "type": "string"
+    },
+    "customer_name": {
+      "type": "string"
+    },
+    "customer_email": {
+      "type": "string"
+    },
+    "customer_phone": {
+      "type": "string"
+    },
+    "customer_cpf": {
+      "type": "string"
+    },
+    "customer_user_id": {
+      "type": "string"
+    },
+    "fulfillment": {
+      "type": "string",
+      "enum": [
+        "retirada",
+        "entrega"
+      ],
+      "enumColors": [
+        "blue",
+        "purple"
+      ],
+      "default": "retirada"
+    },
+    "shipping_cep": {
+      "type": "string"
+    },
+    "shipping_address": {
+      "type": "string"
+    },
+    "shipping_service": {
+      "type": "string"
+    },
+    "shipping_label": {
+      "type": "string"
+    },
+    "shipping_cost": {
+      "type": "number"
+    },
+    "subtotal": {
+      "type": "number"
+    },
+    "discount": {
+      "type": "number"
+    },
+    "total": {
+      "type": "number"
+    },
+    "coupon_code": {
+      "type": "string"
+    },
+    "gift_message": {
+      "type": "string"
+    },
+    "payment_method": {
+      "type": "string",
+      "enum": [
+        "mercadopago",
+        "retirada"
+      ],
+      "enumColors": [
+        "blue",
+        "yellow"
+      ],
+      "default": "mercadopago"
+    },
+    "payment_status": {
+      "type": "string",
+      "enum": [
+        "pendente",
+        "aprovado",
+        "recusado",
+        "reembolsado"
+      ],
+      "enumColors": [
+        "yellow",
+        "green",
+        "red",
+        "gray"
+      ],
+      "default": "pendente"
+    },
+    "payment_reference": {
+      "type": "string"
+    },
+    "payment_url": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "aguardando_pagamento",
+        "pagamento_aprovado",
+        "aguardando_arte",
+        "aguardando_aprovacao",
+        "ajustes_solicitados",
+        "arte_aprovada",
+        "aguardando_producao",
+        "em_producao",
+        "aguardando_conferencia",
+        "pronto",
+        "enviado",
+        "concluido",
+        "cancelado"
+      ],
+      "enumColors": [
+        "yellow",
+        "green",
+        "purple",
+        "pink",
+        "red",
+        "blue",
+        "gray",
+        "blue",
+        "gray",
+        "blue",
+        "purple",
+        "green",
+        "red"
+      ],
+      "default": "aguardando_pagamento"
+    },
+    "quick_due_at": {
+      "type": "string"
+    },
+    "quick_label": {
+      "type": "string"
+    },
+    "last_action_by": {
+      "type": "string"
+    },
+    "last_action_email": {
+      "type": "string"
+    },
+    "last_action_at": {
+      "type": "string"
+    },
+    "status_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "art_approval_mode": {
+      "type": "string",
+      "enum": [
+        "desativada",
+        "opcional",
+        "obrigatoria"
+      ],
+      "enumColors": [
+        "gray",
+        "yellow",
+        "blue"
+      ],
+      "default": "desativada"
+    },
+    "art_approval_requested": {
+      "type": "boolean",
+      "default": false
+    },
+    "art_approval_status": {
+      "type": "string",
+      "enum": [
+        "nao_requerida",
+        "aguardando",
+        "aprovada",
+        "ajustes"
+      ],
+      "enumColors": [
+        "gray",
+        "yellow",
+        "green",
+        "red"
+      ],
+      "default": "nao_requerida"
+    },
+    "art_file_uri": {
+      "type": "string"
+    },
+    "art_notes": {
+      "type": "string"
+    },
+    "art_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "production_days": {
+      "type": "number"
+    },
+    "internal_notes": {
+      "type": "string"
+    },
+    "download_token": {
+      "type": "string"
+    },
+    "download_token_expires": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "customer_name",
+    "customer_email",
+    "total"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "created_by_id": "{{user.id}}"
+        }
+      ]
+    },
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

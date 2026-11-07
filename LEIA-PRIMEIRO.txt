@@ -1,0 +1,16 @@
+PARACOLOR - TESTE LOCAL NO WINDOWS
+
+1. Extraia todos os arquivos deste ZIP para uma pasta nova, de preferencia C:\ParacolorVPS (fora do OneDrive).
+2. Instale Node.js 22.13+ e PostgreSQL 16+ para Windows.
+3. Abra a pasta extraida e execute INICIAR SISTEMA LOCAL.bat.
+4. Digite a senha do usuario postgres definida na instalacao do PostgreSQL.
+5. O sistema abrira em http://localhost:3000 quando estiver pronto.
+
+Este inicializador roda sem WSL, Ubuntu, Docker ou maquina virtual.
+Credenciais de teste:
+E-mail: admin@localhost
+Senha: ParacolorLocal#2026
+
+Para parar o servidor nativo, execute PARAR WINDOWS LOCAL.bat.
+
+Opcao alternativa: INICIAR_LOCAL.bat usa Docker Desktop e WSL 2.

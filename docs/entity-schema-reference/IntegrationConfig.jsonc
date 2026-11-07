@@ -1,0 +1,90 @@
+{
+  "name": "IntegrationConfig",
+  "type": "object",
+  "properties": {
+    "mp_enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "mp_access_token": {
+      "type": "string"
+    },
+    "mp_last_check": {
+      "type": "string"
+    },
+    "mp_account": {
+      "type": "string"
+    },
+    "me_enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "me_token": {
+      "type": "string"
+    },
+    "me_sandbox": {
+      "type": "boolean",
+      "default": true
+    },
+    "me_from_cep": {
+      "type": "string"
+    },
+    "me_last_check": {
+      "type": "string"
+    },
+    "me_account": {
+      "type": "string"
+    },
+    "smtp_host": {
+      "type": "string"
+    },
+    "smtp_port": {
+      "type": "number",
+      "default": 465
+    },
+    "smtp_security": {
+      "type": "string",
+      "enum": [
+        "tls",
+        "starttls"
+      ],
+      "enumColors": [
+        "green",
+        "blue"
+      ],
+      "default": "tls"
+    },
+    "smtp_username": {
+      "type": "string"
+    },
+    "smtp_password": {
+      "type": "string"
+    },
+    "smtp_from_email": {
+      "type": "string"
+    }
+  },
+  "required": [],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

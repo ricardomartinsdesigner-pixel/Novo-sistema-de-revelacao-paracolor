@@ -1,0 +1,120 @@
+{
+  "name": "OrderPhoto",
+  "type": "object",
+  "properties": {
+    "order_id": {
+      "type": "string"
+    },
+    "item_id": {
+      "type": "string"
+    },
+    "area": {
+      "type": "string"
+    },
+    "filename": {
+      "type": "string"
+    },
+    "original_file_uri": {
+      "type": "string"
+    },
+    "print_file_uri": {
+      "type": "string"
+    },
+    "print_name": {
+      "type": "string"
+    },
+    "size_name": {
+      "type": "string"
+    },
+    "width_cm": {
+      "type": "number"
+    },
+    "height_cm": {
+      "type": "number"
+    },
+    "fit_mode": {
+      "type": "string"
+    },
+    "border": {
+      "type": "boolean"
+    },
+    "zoom": {
+      "type": "number"
+    },
+    "offset_x": {
+      "type": "number"
+    },
+    "offset_y": {
+      "type": "number"
+    },
+    "rotation": {
+      "type": "number"
+    },
+    "flip_h": {
+      "type": "boolean"
+    },
+    "flip_v": {
+      "type": "boolean"
+    },
+    "quality": {
+      "type": "string"
+    },
+    "alerts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "caption": {
+      "type": "string"
+    },
+    "caption_style": {
+      "type": "object"
+    },
+    "polaroid_model": {
+      "type": "string"
+    },
+    "copies": {
+      "type": "number",
+      "default": 1
+    },
+    "confirmed_issue": {
+      "type": "boolean",
+      "default": false
+    },
+    "sort": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "order_id",
+    "area"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "created_by_id": "{{user.id}}"
+        }
+      ]
+    },
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

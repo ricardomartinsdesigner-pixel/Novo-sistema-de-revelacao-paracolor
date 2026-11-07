@@ -1,0 +1,13 @@
+node_modules
+.git
+.env
+.env.local
+.env.windows-local
+.paracolor-windows-local.pid
+windows-local-server*.log
+.output
+dist
+.wrangler
+.tanstack
+data
+*.log

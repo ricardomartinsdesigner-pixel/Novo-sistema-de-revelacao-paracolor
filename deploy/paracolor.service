@@ -1,0 +1,22 @@
+[Unit]
+Description=Paracolor web application
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=paracolor
+WorkingDirectory=/opt/paracolor
+Environment=NODE_ENV=production
+Environment=APP_VERSION=1.0.1
+Environment=UPDATE_STATE_DIR=/var/lib/paracolor/updates
+EnvironmentFile=/etc/paracolor/paracolor.env
+ExecStart=/usr/bin/node .output/server/index.mjs
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

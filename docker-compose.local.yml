@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: paracolor
+      POSTGRES_USER: paracolor
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?configure POSTGRES_PASSWORD in .env.local}
+    volumes:
+      - local_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paracolor -d paracolor"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env.local
+    environment:
+      NODE_ENV: production
+      SESSION_COOKIE_SECURE: "false"
+      PORT: 3000
+      NITRO_HOST: 0.0.0.0
+      PUBLIC_APP_URL: http://localhost:3000
+      DATABASE_URL: postgresql://paracolor:${POSTGRES_PASSWORD}@db:5432/paracolor
+      STORAGE_DIR: /var/lib/paracolor/uploads
+      APP_VERSION: ${APP_VERSION:-1.0.1}
+      UPDATE_STATE_DIR: /var/lib/paracolor/app-output/updates
+      BACKUP_DIR: /var/lib/paracolor/backups
+      MAX_BACKUP_MB: ${MAX_BACKUP_MB:-10240}
+    volumes:
+      - local_uploads_data:/var/lib/paracolor/uploads
+      - local_app_output:/var/lib/paracolor/app-output
+      - local_backups_data:/var/lib/paracolor/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  local_postgres_data:
+  local_uploads_data:
+  local_app_output:
+  local_backups_data:

@@ -1,0 +1,85 @@
+{
+  "name": "OrderItem",
+  "type": "object",
+  "properties": {
+    "order_id": {
+      "type": "string"
+    },
+    "area": {
+      "type": "string",
+      "enum": [
+        "revelacao",
+        "polaroid",
+        "banner",
+        "personalizado",
+        "moldura"
+      ],
+      "enumColors": [
+        "blue",
+        "pink",
+        "yellow",
+        "purple",
+        "green"
+      ]
+    },
+    "product_ref_id": {
+      "type": "string"
+    },
+    "product_name": {
+      "type": "string"
+    },
+    "variant": {
+      "type": "string"
+    },
+    "qty": {
+      "type": "number"
+    },
+    "unit_price": {
+      "type": "number"
+    },
+    "line_total": {
+      "type": "number"
+    },
+    "photo_count": {
+      "type": "number"
+    },
+    "options": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "order_id",
+    "area",
+    "product_name",
+    "qty",
+    "unit_price",
+    "line_total"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "created_by_id": "{{user.id}}"
+        }
+      ]
+    },
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

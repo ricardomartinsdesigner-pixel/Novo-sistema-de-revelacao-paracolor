@@ -1,0 +1,62 @@
+{
+  "name": "PolaroidModel",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "width_cm": {
+      "type": "number"
+    },
+    "height_cm": {
+      "type": "number"
+    },
+    "frame_color": {
+      "type": "string"
+    },
+    "caption_area": {
+      "type": "number"
+    },
+    "price": {
+      "type": "number"
+    },
+    "has_caption": {
+      "type": "boolean",
+      "default": true
+    },
+    "description": {
+      "type": "string"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "sort": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "name",
+    "width_cm",
+    "height_cm",
+    "price"
+  ],
+  "rls": {
+    "read": {},
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

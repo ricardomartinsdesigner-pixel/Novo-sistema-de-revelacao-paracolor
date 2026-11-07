@@ -1,0 +1,25 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "description": "The role of the user in the app",
+      "enum": [
+        "admin",
+        "user"
+      ]
+    },
+    "phone": {
+      "type": "string",
+      "description": "WhatsApp / telefone informado no cadastro"
+    },
+    "address": {
+      "type": "string",
+      "description": "Endere\u00e7o completo informado no cadastro (opcional)"
+    }
+  },
+  "required": [
+    "role"
+  ]
+}

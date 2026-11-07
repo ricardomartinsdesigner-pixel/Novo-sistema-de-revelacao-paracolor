@@ -1,0 +1,65 @@
+{
+  "name": "PhotoSize",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "width_cm": {
+      "type": "number"
+    },
+    "height_cm": {
+      "type": "number"
+    },
+    "price": {
+      "type": "number"
+    },
+    "border_price": {
+      "type": "number"
+    },
+    "print_width_cm": {
+      "type": "number"
+    },
+    "print_height_cm": {
+      "type": "number"
+    },
+    "dpi": {
+      "type": "number",
+      "default": 300
+    },
+    "description": {
+      "type": "string"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "sort": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "name",
+    "width_cm",
+    "height_cm",
+    "price"
+  ],
+  "rls": {
+    "read": {},
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "name": "QuantityTier",
+  "type": "object",
+  "properties": {
+    "category": {
+      "type": "string",
+      "enum": [
+        "revelacao",
+        "polaroid"
+      ],
+      "enumColors": [
+        "blue",
+        "pink"
+      ],
+      "default": "revelacao"
+    },
+    "label": {
+      "type": "string"
+    },
+    "min_qty": {
+      "type": "number"
+    },
+    "max_qty": {
+      "type": "number",
+      "default": 0
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "sort": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "category",
+    "label",
+    "min_qty"
+  ],
+  "rls": {
+    "read": {},
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

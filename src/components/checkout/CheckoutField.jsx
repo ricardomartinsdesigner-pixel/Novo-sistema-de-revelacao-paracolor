@@ -1,0 +1,3 @@
+export default function CheckoutField({ label, value, onChange, type = "text", required = false }) {
+  return <label className="block text-xs text-muted-foreground">{label}<input type={type} value={value} required={required} onChange={(event) => onChange(event.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring" /></label>;
+}

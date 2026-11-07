@@ -1,0 +1,94 @@
+{
+  "name": "Frame",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "material": {
+      "type": "string"
+    },
+    "color": {
+      "type": "string"
+    },
+    "finish": {
+      "type": "string"
+    },
+    "profile_mm": {
+      "type": "number"
+    },
+    "sizes": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "price": {
+      "type": "number"
+    },
+    "availability": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "exposicao",
+        "consulta",
+        "compra"
+      ],
+      "enumColors": [
+        "gray",
+        "yellow",
+        "green"
+      ],
+      "default": "consulta"
+    },
+    "image": {
+      "type": "string"
+    },
+    "images": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "featured": {
+      "type": "boolean",
+      "default": false
+    },
+    "sort": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "read": {},
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "name": "StudioPhoto",
+  "type": "object",
+  "properties": {
+    "gallery_id": {
+      "type": "string"
+    },
+    "image_url": {
+      "type": "string"
+    },
+    "alt": {
+      "type": "string"
+    },
+    "authorized": {
+      "type": "boolean",
+      "default": false
+    },
+    "sort": {
+      "type": "number",
+      "default": 0
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "gallery_id",
+    "image_url"
+  ],
+  "rls": {
+    "read": {},
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

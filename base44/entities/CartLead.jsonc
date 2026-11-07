@@ -1,0 +1,73 @@
+{
+  "name": "CartLead",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "customer_email": {
+      "type": "string"
+    },
+    "customer_name": {
+      "type": "string"
+    },
+    "items_summary": {
+      "type": "string"
+    },
+    "item_count": {
+      "type": "number"
+    },
+    "total": {
+      "type": "number"
+    },
+    "last_activity": {
+      "type": "string"
+    },
+    "reminder_sent_date": {
+      "type": "string"
+    },
+    "reminder_count": {
+      "type": "number",
+      "default": 0
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "aberto",
+        "lembrete_enviado",
+        "descartado"
+      ],
+      "enumColors": [
+        "yellow",
+        "blue",
+        "gray"
+      ],
+      "default": "aberto"
+    }
+  },
+  "required": [
+    "customer_email"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

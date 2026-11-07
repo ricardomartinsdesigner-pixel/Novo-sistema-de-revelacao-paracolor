@@ -1,0 +1,41 @@
+name: Publicar versão do Paracolor
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Instalar dependências
+        run: npm ci --legacy-peer-deps
+      - name: Testar regras críticas
+        run: npm test
+      - name: Verificar lint
+        run: npm run lint
+      - name: Compilar aplicação
+        run: npm run build
+      - name: Empacotar build
+        run: |
+          tar -czf paracolor-output.tar.gz .output
+          sha256sum paracolor-output.tar.gz > paracolor-output.tar.gz.sha256
+      - name: Publicar Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            paracolor-output.tar.gz
+            paracolor-output.tar.gz.sha256

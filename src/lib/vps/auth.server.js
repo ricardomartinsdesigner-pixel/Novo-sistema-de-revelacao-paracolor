@@ -4,6 +4,7 @@ import { clearSessionCookie, issueSession, sessionCookie } from "./session.serve
 import { makeServerBase44 } from "./server-client.server";
 import { sendStoreEmail } from "@/lib/smtp-transport.server";
 import { isAllowedCustomerPassword } from "@/lib/password-policy";
+import { mayRegisterWithoutEmailConfirmation } from "@/lib/registration-policy";
 
 const emailValue = (value) => String(value || "").trim().toLowerCase();
 const publicOrigin = (request) => (process.env.PUBLIC_APP_URL || new URL(request.url).origin).replace(/\/$/, "");
@@ -15,7 +16,9 @@ async function sendCode(request, email, code, purpose) {
   const base44 = makeServerBase44(request);
   const store = await base44.asServiceRole.entities.Settings.list({ sort: "-created_date", limit: 1 });
   const settings = store.items?.[0] || {};
-  if (settings.email_enabled === false) throw new Error("O envio de e-mails está desativado nas configurações da loja.");
+  if (settings.email_enabled === false) {
+    throw Object.assign(new Error("O envio de e-mails está desativado nas configurações da loja."), { code: "EMAIL_DISABLED" });
+  }
   await sendStoreEmail(base44, settings, {
     to: email,
     subject: `${settings.store_name || "Paracolor"} · código de confirmação`,
@@ -33,6 +36,22 @@ async function saveOtp(email, purpose, code, payload = {}) {
   );
 }
 
+async function createCustomer(email, profile) {
+  const id = randomUUID();
+  const user = {
+    id,
+    email,
+    full_name: profile.full_name || "",
+    phone: "",
+    address: "",
+    role: "user",
+    is_verified: true,
+    password_hash: profile.password_hash,
+  };
+  await getPool().query("INSERT INTO vps_records(entity,id,created_by_id,data) VALUES('User',$1,$1,$2)", [id, user]);
+  return response({ ok: true, verification_required: false, user: safeUser(user) }, 200, sessionCookie(issueSession(id)));
+}
+
 async function register(request, data) {
   await ensureDatabase();
   const email = emailValue(data.email);
@@ -41,10 +60,15 @@ async function register(request, data) {
   if (!isAllowedCustomerPassword(password)) throw new Error("A senha precisa ter de 8 a 160 caracteres.");
   const existing = await getPool().query("SELECT id FROM vps_records WHERE entity='User' AND lower(data->>'email')=$1 LIMIT 1", [email]);
   if (existing.rowCount) throw new Error("Este e-mail já possui uma conta.");
+  const profile = { full_name: String(data.full_name || "").trim().slice(0, 160), password_hash: newPasswordHash(password) };
   const code = String(randomInt(100000, 1000000));
-  await saveOtp(email, "register", code, { full_name: String(data.full_name || "").trim().slice(0, 160), password_hash: newPasswordHash(password) });
+  await saveOtp(email, "register", code, profile);
   try { await sendCode(request, email, code, "register"); }
-  catch (error) { await getPool().query("DELETE FROM vps_otps WHERE email=$1 AND purpose='register'", [email]); throw error; }
+  catch (error) {
+    await getPool().query("DELETE FROM vps_otps WHERE email=$1 AND purpose='register'", [email]);
+    if (mayRegisterWithoutEmailConfirmation(error, data.managed_account === true)) return createCustomer(email, profile);
+    throw error;
+  }
   return response({ ok: true, verification_required: true });
 }
 

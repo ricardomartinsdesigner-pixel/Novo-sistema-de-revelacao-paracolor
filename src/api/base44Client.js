@@ -49,7 +49,7 @@ export const base44 = {
     setToken: () => {},
     async me() { return (await requestJson("/api/auth/me")).user; },
     async login({ email, password }) { return requestJson("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }); },
-    async register({ email, password }) { return requestJson("/api/auth/register", { method: "POST", body: JSON.stringify({ email, password }) }); },
+    async register({ email, password, full_name, managed_account }) { return requestJson("/api/auth/register", { method: "POST", body: JSON.stringify({ email, password, full_name, managed_account }) }); },
     async verifyOtp({ email, otpCode }) { return requestJson("/api/auth/verify", { method: "POST", body: JSON.stringify({ email, otpCode }) }); },
     async resendOtp(email) { return requestJson("/api/auth/resend", { method: "POST", body: JSON.stringify({ email }) }); },
     async resetPasswordRequest(email) { return requestJson("/api/auth/forgot", { method: "POST", body: JSON.stringify({ email }) }); },

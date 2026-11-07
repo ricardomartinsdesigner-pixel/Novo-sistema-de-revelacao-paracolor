@@ -8,9 +8,7 @@ import { Label } from "@/components/ui/label";
 import { safeReturnTo } from "@/lib/authReturnTo";
 
 /**
- * The /register page: register → OTP → verifyOtp → setToken. Registration alone
- * does not sign the user in (the account is unverified), so the code step is never
- * skipped and loginViaEmailPassword is never called right after register.
+ * The /register page supports immediate signup without email delivery and OTP confirmation when SMTP is enabled.
  */
 export function RegisterPage({ managedAccount } = {}) {
   const returnTo = safeReturnTo();

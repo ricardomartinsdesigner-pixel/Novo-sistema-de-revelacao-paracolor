@@ -8,8 +8,8 @@ Na configuração de prazos, o botão **Buscar feriados nacionais** consulta a l
 
 1. Atualize a versão em `package.json` e `package-lock.json`.
 2. Faça commit das alterações na branch principal, incluindo `.github/workflows/release.yml`.
-3. Publique uma tag com o mesmo número, por exemplo `v1.0.3`. O workflow executa testes, lint e build; se tudo passar, publica os arquivos necessários para o atualizador.
-4. Configure `APP_VERSION=1.0.3` no `.env` do servidor ao instalar essa versão.
+3. Publique uma tag com o mesmo número, por exemplo `v1.0.5`. O workflow executa testes, lint e build; se tudo passar, publica os arquivos necessários para o atualizador.
+4. Configure `APP_VERSION=1.0.4` no `.env` do servidor ao instalar essa versão.
 5. O painel compara a versão instalada com a Release mais recente e oferece a atualização quando houver uma versão superior.
 
 Para próximas correções, incremente a versão (por exemplo, `1.0.4`) e publique uma tag nova correspondente. Não reutilize tags antigas.

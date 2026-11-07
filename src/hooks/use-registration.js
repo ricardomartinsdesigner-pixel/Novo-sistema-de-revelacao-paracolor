@@ -60,9 +60,20 @@ export function useRegistration(returnTo, managedAccount) {
         setStep("existing");
         return;
       }
-      await base44.auth.register({ email: profile().email, password });
+      const result = await base44.auth.register({
+        email: profile().email,
+        password,
+        full_name: fullName.trim(),
+        managed_account: Boolean(managedAccount),
+      });
       setPassword("");
       setConfirm("");
+      if (result?.verification_required === false && !managedAccount) {
+        await saveProfile();
+        toast("Cadastro concluído", { description: "Você já pode acessar sua conta. A confirmação por e-mail ficará disponível quando o envio for ativado." });
+        window.location.href = returnTo;
+        return;
+      }
       setStep("otp");
     } catch (err) {
       setError(err.message || "Não foi possível criar a conta");

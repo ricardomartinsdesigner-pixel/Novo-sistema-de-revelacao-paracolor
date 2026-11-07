@@ -23,8 +23,20 @@ export function publicSmtpConfig(config) {
   };
 }
 
+export class SmtpNotConfiguredError extends Error {
+  constructor() {
+    super("O servidor SMTP ainda não foi configurado.");
+    this.name = "SmtpNotConfiguredError";
+    this.code = "SMTP_NOT_CONFIGURED";
+  }
+}
+
 export async function loadSmtpConfig(base44) {
   const stored = await loadIntegrationConfig(base44);
+  const hasAnySmtpSetting = Boolean(
+    stored?.smtp_host || stored?.smtp_username || stored?.smtp_password || stored?.smtp_from_email
+  );
+  if (!hasAnySmtpSetting) throw new SmtpNotConfiguredError();
   if (!stored?.smtp_host || !stored?.smtp_password || !stored?.smtp_from_email) {
     throw new Error("Cadastre e salve o servidor, usuário, senha e remetente SMTP em Mensagens antes de enviar.");
   }

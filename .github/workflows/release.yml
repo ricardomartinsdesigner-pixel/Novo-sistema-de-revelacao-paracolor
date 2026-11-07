@@ -2,9 +2,10 @@ name: Publicar versão do Paracolor
 
 on:
   push:
+    branches:
+      - "v*.*.*"
     tags:
       - "v*.*.*"
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -35,6 +36,7 @@ jobs:
       - name: Publicar Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
           generate_release_notes: true
           files: |
             paracolor-output.tar.gz

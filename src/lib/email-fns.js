@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireUser } from "@/lib/auth-middleware";
 import { loadStoreSettings } from "@/lib/email.server";
 import { sendStoreEmail } from "@/lib/smtp-transport.server";
+import { loadSmtpConfig } from "@/lib/smtp-config.server";
 
 export const sendTestEmail = createServerFn({ method: "POST" })
   .middleware([requireUser])
@@ -11,8 +12,11 @@ export const sendTestEmail = createServerFn({ method: "POST" })
     const settings = await loadStoreSettings(base44);
     const storeName = settings.store_name || "Paracolor";
     try {
-      await sendStoreEmail(base44, settings, {
-        to: context.user.email,
+      const smtp = await loadSmtpConfig(base44);
+      // O teste valida o remetente que acabou de ser configurado. Isso evita
+      // depender do e-mail do perfil administrativo como destinatário.
+      await sendStoreEmail(base44, { ...settings, email_reply_to: "" }, {
+        to: smtp.from_email,
         subject: `${storeName} · teste de envio de e-mail`,
         html: `<div style="font-family:Inter,Arial,sans-serif;padding:24px;color:#1F1A17">
           <p style="font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#86756A">Teste SMTP da loja</p>
@@ -21,7 +25,7 @@ export const sendTestEmail = createServerFn({ method: "POST" })
         </div>`,
         text: `Seus e-mails estão funcionando. Este é um envio de teste do painel da ${storeName}.`,
       });
-      return { ok: true, message: `O SMTP aceitou o envio de teste para ${context.user.email}. Confira também a pasta de spam.` };
+      return { ok: true, message: `O SMTP aceitou o envio de teste para ${smtp.from_email}. Confira também a pasta de spam.` };
     } catch (error) {
       return { ok: false, message: error?.message || "Não foi possível enviar o teste." };
     }

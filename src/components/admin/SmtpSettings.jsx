@@ -21,7 +21,7 @@ export default function SmtpSettings() {
             </Button>
             <Button type="submit" disabled={busy}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Salvar SMTP</Button>
           </div>
-          <p className="mt-2 text-right text-[11px] text-muted-foreground">O teste é enviado ao e-mail do administrador conectado.</p>
+          <p className="mt-2 text-right text-[11px] text-muted-foreground">O teste é enviado ao e-mail remetente configurado acima.</p>
         </form>
       ) : null}
       {error ? <p role="alert" className="mt-3 text-sm text-destructive">{error}</p> : null}

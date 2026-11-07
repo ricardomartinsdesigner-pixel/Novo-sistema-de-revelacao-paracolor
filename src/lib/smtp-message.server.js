@@ -21,7 +21,13 @@ function header(value) {
 }
 
 export function createSmtpMessage(input) {
-  const message = messageInput.parse(input);
+  const to = String(input.to ?? "").trim();
+  const fromEmail = String(input.from_email ?? "").trim();
+  const configuredReplyTo = String(input.reply_to ?? "").trim();
+  const validReplyTo = configuredReplyTo && z.string().max(254).email().safeParse(configuredReplyTo).success
+    ? configuredReplyTo
+    : "";
+  const message = messageInput.parse({ ...input, to, from_email: fromEmail, reply_to: validReplyTo });
   const boundary = `paracolor-${crypto.randomUUID()}`;
   const domain = message.from_email.split("@")[1];
   const lines = [

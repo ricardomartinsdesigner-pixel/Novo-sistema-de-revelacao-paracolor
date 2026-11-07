@@ -100,7 +100,7 @@ async function makeBackupBundle(destination) {
       format: "paracolor-full-backup",
       format_version: 1,
       created_at: new Date().toISOString(),
-      app_version: process.env.APP_VERSION || "1.0.1",
+      app_version: process.env.APP_VERSION || "1.0.2",
       includes: ["postgresql application data", "uploaded files", "runtime configuration snapshot"],
     };
     await writeFile(path.join(workDir, "manifest.json"), JSON.stringify(manifest, null, 2), { mode: 0o600 });

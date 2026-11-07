@@ -4,15 +4,15 @@ O painel **Administrador → Configurações → Atualizações do sistema** con
 
 Na configuração de prazos, o botão **Buscar feriados nacionais** consulta a lista do ano na BrasilAPI e combina os resultados com os feriados já cadastrados. A lista permite remover datas importadas ou manuais. Feriados estaduais e municipais devem ser informados manualmente.
 
-## Primeira publicação
+## Publicação de uma versão
 
-1. Torne público o repositório `ricardomartinsdesigner-pixel/Novo-sistema-de-revelacao-paracolor`.
-2. Envie o projeto completo para a branch principal, incluindo `.github/workflows/release.yml`.
-3. Configure `APP_VERSION=1.0.1` no `.env` do servidor.
-4. Crie e envie a tag `v1.0.1` para o GitHub. A Action executa testes, lint e build; se tudo passar, publica os dois arquivos necessários como Release.
-5. Para esta instalação 1.0.1, a Release será a versão inicial disponível. Nas próximas versões, o painel encontrará e instalará uma versão com número maior.
+1. Atualize a versão em `package.json` e `package-lock.json`.
+2. Faça commit das alterações na branch principal, incluindo `.github/workflows/release.yml`.
+3. Publique uma tag com o mesmo número, por exemplo `v1.0.2`. O workflow executa testes, lint e build; se tudo passar, publica os arquivos necessários para o atualizador.
+4. Configure `APP_VERSION=1.0.2` no `.env` do servidor ao instalar essa versão.
+5. O painel compara a versão instalada com a Release mais recente e oferece a atualização quando houver uma versão superior.
 
-Para próximas correções, edite `package.json` e `package-lock.json` com a nova versão, por exemplo `1.0.2`, faça commit e publique a tag `v1.0.2`. Não reutilize tags antigas.
+Para próximas correções, incremente a versão (por exemplo, `1.0.3`) e publique uma tag nova correspondente. Não reutilize tags antigas.
 
 ## Reinício por ambiente
 

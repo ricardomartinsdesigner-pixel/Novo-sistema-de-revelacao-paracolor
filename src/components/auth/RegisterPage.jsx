@@ -160,8 +160,8 @@ export function RegisterPage({ managedAccount } = {}) {
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input id="register-password" type="password" autoComplete="new-password" minLength={8} maxLength={160} placeholder="Mínimo de 8 caracteres" value={password} onChange={(e) => setPassword(e.target.value)} className="h-12 pl-10" disabled={busy} required />
-              <p className="text-[11px] text-muted-foreground">Use pelo menos 8 caracteres. Não precisa incluir maiúsculas ou símbolos.</p>
             </div>
+            <p className="text-[11px] text-muted-foreground">Use pelo menos 8 caracteres. Não precisa incluir maiúsculas ou símbolos.</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="register-confirm">Confirmar senha</Label>

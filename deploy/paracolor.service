@@ -7,7 +7,7 @@ Type=simple
 User=paracolor
 WorkingDirectory=/opt/paracolor
 Environment=NODE_ENV=production
-Environment=APP_VERSION=1.0.5
+Environment=APP_VERSION=1.0.6
 Environment=UPDATE_STATE_DIR=/var/lib/paracolor/updates
 EnvironmentFile=/etc/paracolor/paracolor.env
 ExecStart=/usr/bin/node .output/server/index.mjs

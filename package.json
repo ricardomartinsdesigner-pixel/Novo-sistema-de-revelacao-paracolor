@@ -1,7 +1,7 @@
 {
   "name": "paracolor-vps",
   "private": true,
-  "version": "1.12.24",
+  "version": "1.12.25",
   "type": "module",
   "engines": {
     "node": ">=22.13.0"

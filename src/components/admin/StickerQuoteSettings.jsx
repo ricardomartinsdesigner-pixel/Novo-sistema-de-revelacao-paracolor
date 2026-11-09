@@ -9,12 +9,13 @@ import { useSettings } from "@/lib/store";
 const FIELDS = [
   { key: "sticker_price_a4", label: "Preço por folha A4", unit: "R$ / folha" },
   { key: "sticker_price_a3", label: "Preço por folha A3", unit: "R$ / folha" },
+  { key: "sticker_vinyl_width_cm", label: "Largura útil do vinil", unit: "cm" },
   { key: "sticker_price_per_meter", label: "Preço por metro de adesivo", unit: "R$ / metro" },
   { key: "sticker_minimum_charge", label: "Cobrança mínima na opção por metro", unit: "R$ mínimo" },
 ];
 
 const initialForm = (settings) => Object.fromEntries(FIELDS.map(({ key }) => [
-  key, settings?.[key] === null || settings?.[key] === undefined ? "" : String(settings[key]),
+  key, settings?.[key] === null || settings?.[key] === undefined ? (key === "sticker_vinyl_width_cm" ? "100" : "") : String(settings[key]),
 ]));
 
 export default function StickerQuoteSettings() {
@@ -61,10 +62,10 @@ export default function StickerQuoteSettings() {
         <div>
           <p className="eyebrow">Orçamento</p>
           <h2 className="mt-1 text-xl">Preços da calculadora de adesivos</h2>
-          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">Defina os valores usados no orçamento. Para bobina, a calculadora usa o consumo estimado pelo preço do metro e aplica a cobrança mínima quando necessário.</p>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">Defina a largura útil do vinil, os preços por folha e por metro. No vinil, a calculadora estima o comprimento consumido e aplica a cobrança mínima quando necessário.</p>
         </div>
       </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {FIELDS.map(({ key, label, unit }) => (
           <label key={key} className="block text-xs text-muted-foreground">
             {label}

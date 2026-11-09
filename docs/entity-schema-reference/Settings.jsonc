@@ -100,6 +100,9 @@
     "sticker_price_a3": {
       "type": "number"
     },
+    "sticker_vinyl_width_cm": {
+      "type": "number"
+    },
     "sticker_price_per_meter": {
       "type": "number"
     },

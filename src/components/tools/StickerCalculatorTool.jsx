@@ -104,7 +104,32 @@ function calculateRollLayout({ quantity, rollWidthMm, stickerWidthMm, stickerHei
     rotated: best.rotated,
   }));
   const areaMm2 = rollWidthMm * best.lengthMm;
-  return { ...best, usableWidth, placements, areaMm2, linearMeters: best.lengthMm / 1000 };
+  return { ...best, count: quantity, usableWidth, placements, areaMm2, linearMeters: best.lengthMm / 1000 };
+}
+
+function calculateCapacityLayout({ widthMm, lengthMm, stickerWidthMm, stickerHeightMm, gapMm, sideMarginMm = 0, allowRotation }) {
+  const usableWidth = widthMm - sideMarginMm * 2;
+  if (![widthMm, lengthMm, stickerWidthMm, stickerHeightMm, gapMm, sideMarginMm].every(Number.isFinite)
+    || widthMm <= 0 || lengthMm <= 0 || stickerWidthMm < 5 || stickerHeightMm < 5 || gapMm < 0 || sideMarginMm < 0 || usableWidth <= 0) return null;
+  const candidates = [
+    { width: stickerWidthMm, height: stickerHeightMm, rotated: false },
+    ...(allowRotation && stickerWidthMm !== stickerHeightMm ? [{ width: stickerHeightMm, height: stickerWidthMm, rotated: true }] : []),
+  ].map((item) => {
+    const columns = Math.floor((usableWidth + gapMm) / (item.width + gapMm));
+    const rows = Math.floor((lengthMm + gapMm) / (item.height + gapMm));
+    return { ...item, columns, rows, count: columns * rows };
+  }).filter((item) => item.columns > 0 && item.rows > 0);
+  if (!candidates.length) return null;
+  const best = candidates.sort((a, b) => b.count - a.count || b.columns - a.columns)[0];
+  const previewCount = Math.min(best.count, 1200);
+  const placements = Array.from({ length: previewCount }, (_, index) => ({
+    x: sideMarginMm + (index % best.columns) * (best.width + gapMm),
+    y: Math.floor(index / best.columns) * (best.height + gapMm),
+    width: best.width,
+    height: best.height,
+    rotated: best.rotated,
+  }));
+  return { ...best, usableWidth, placements, widthMm, lengthMm, areaMm2: widthMm * lengthMm, linearMeters: lengthMm / 1000 };
 }
 
 function makeRollMaskSvg(layout, artwork, rollWidthMm) {
@@ -196,10 +221,10 @@ function SheetPreview({ profile, layout, placements, stickerWidthMm, stickerHeig
   );
 }
 
-function RollPreview({ layout, rollWidthMm, artwork }) {
+function RollPreview({ layout, rollWidthMm, artwork, label = "vinil" }) {
   const preview = layout.placements.slice(0, 1200);
   return (
-    <svg viewBox={`0 0 ${Math.max(layout.lengthMm, 1)} ${rollWidthMm}`} role="img" aria-label={`Encaixe de ${layout.placements.length} adesivos em bobina`}
+    <svg viewBox={`0 0 ${Math.max(layout.lengthMm, 1)} ${rollWidthMm}`} role="img" aria-label={`Encaixe de ${layout.count ?? layout.placements.length} adesivos em ${label}`}
       className="mx-auto block max-h-[55vh] w-full border border-slate-300 bg-white shadow-sm">
       <rect x="0" y="0" width={layout.lengthMm} height={rollWidthMm} fill="#fff" />
       {preview.map((item, index) => (
@@ -296,7 +321,9 @@ function StickerCalculatorDialog({ isAdmin = false }) {
   const [sheetId, setSheetId] = useState("A4");
   const [widthCm, setWidthCm] = useState("5");
   const [heightCm, setHeightCm] = useState("5");
-  const [rollWidthCm, setRollWidthCm] = useState("100");
+  const [areaWidthCm, setAreaWidthCm] = useState("100");
+  const [areaHeightCm, setAreaHeightCm] = useState("100");
+  const [availableMeters, setAvailableMeters] = useState("1");
   const [rollSideMarginMm, setRollSideMarginMm] = useState("0");
   const [desiredQuantity, setDesiredQuantity] = useState("");
   const [includeMarks, setIncludeMarks] = useState(false);
@@ -409,20 +436,40 @@ function StickerCalculatorDialog({ isAdmin = false }) {
   const sheetPrice = settings?.[sheetPriceKey];
   const hasSheetPrice = hasPrice(sheetPrice);
   const sheetQuote = Math.round(sheetCount * Number(sheetPrice || 0) * 100) / 100;
+  const vinylWidthCm = Number(settings?.sticker_vinyl_width_cm) > 0 ? Number(settings.sticker_vinyl_width_cm) : 100;
+  const stickerWidthMm = Number(widthCm) * 10;
+  const stickerHeightMm = Number(heightCm) * 10;
+  const gapMm = Number(config.gapMm) || 0;
+  const areaLayout = useMemo(() => calculateCapacityLayout({
+    widthMm: Number(areaWidthCm) * 10,
+    lengthMm: Number(areaHeightCm) * 10,
+    stickerWidthMm,
+    stickerHeightMm,
+    gapMm,
+    allowRotation: config.allowRotation,
+  }), [areaWidthCm, areaHeightCm, stickerWidthMm, stickerHeightMm, gapMm, config.allowRotation]);
+  const meterCapacity = useMemo(() => calculateCapacityLayout({
+    widthMm: vinylWidthCm * 10,
+    lengthMm: Number(availableMeters) * 1000,
+    stickerWidthMm,
+    stickerHeightMm,
+    gapMm,
+    sideMarginMm: Number(rollSideMarginMm) || 0,
+    allowRotation: config.allowRotation,
+  }), [vinylWidthCm, availableMeters, stickerWidthMm, stickerHeightMm, gapMm, rollSideMarginMm, config.allowRotation]);
   const rollLayout = useMemo(() => {
     const quantity = Math.floor(Number(desiredQuantity) || 0);
-    const rollWidth = Number(rollWidthCm) * 10;
-    const stickerWidth = Number(widthCm) * 10;
-    const stickerHeight = Number(heightCm) * 10;
+    const rollWidth = vinylWidthCm * 10;
     const sideMargin = Number(rollSideMarginMm) || 0;
-    if (!(quantity > 0 && quantity <= 20000 && rollWidth > 0 && stickerWidth >= 5 && stickerHeight >= 5)) return null;
-    return calculateRollLayout({ quantity, rollWidthMm: rollWidth, stickerWidthMm: stickerWidth, stickerHeightMm: stickerHeight, gapMm: Number(config.gapMm) || 0, sideMarginMm: sideMargin, allowRotation: config.allowRotation });
-  }, [desiredQuantity, rollWidthCm, widthCm, heightCm, rollSideMarginMm, config.gapMm, config.allowRotation]);
+    if (!(quantity > 0 && quantity <= 20000 && rollWidth > 0 && stickerWidthMm >= 5 && stickerHeightMm >= 5)) return null;
+    return calculateRollLayout({ quantity, rollWidthMm: rollWidth, stickerWidthMm, stickerHeightMm, gapMm, sideMarginMm: sideMargin, allowRotation: config.allowRotation });
+  }, [desiredQuantity, vinylWidthCm, stickerWidthMm, stickerHeightMm, rollSideMarginMm, gapMm, config.allowRotation]);
   const meterPrice = settings?.sticker_price_per_meter;
   const minimumCharge = settings?.sticker_minimum_charge;
   const hasRollPrices = hasPrice(meterPrice) && hasPrice(minimumCharge);
-  const rollQuote = rollLayout && hasRollPrices
-    ? Math.round(Math.max(rollLayout.linearMeters * Number(meterPrice), Number(minimumCharge)) * 100) / 100
+  const billableMeters = wanted > 0 ? rollLayout?.linearMeters : Number(availableMeters);
+  const rollQuote = billableMeters > 0 && hasRollPrices
+    ? Math.round(Math.max(billableMeters * Number(meterPrice), Number(minimumCharge)) * 100) / 100
     : null;
   const displayedCount = layout ? (wanted ? Math.min(wanted, layout.count) : layout.count) : 0;
   const placements = layout?.placements.slice(0, displayedCount) || [];
@@ -503,8 +550,8 @@ function StickerCalculatorDialog({ isAdmin = false }) {
 
   function exportRollMask() {
     if (!rollLayout) return;
-    const svg = makeRollMaskSvg(rollLayout, artwork, Number(rollWidthCm) * 10);
-    downloadBlob(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }), `paracolor-mascara-corte-${rollWidthCm.replace(".", "-")}cm.svg`);
+    const svg = makeRollMaskSvg(rollLayout, artwork, vinylWidthCm * 10);
+    downloadBlob(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }), `paracolor-mascara-corte-vinil-${vinylWidthCm}cm.svg`);
   }
 
   async function exportPng() {
@@ -555,7 +602,7 @@ function StickerCalculatorDialog({ isAdmin = false }) {
           <span className="rounded-lg bg-primary/10 p-2.5 text-primary"><Sticker className="h-5 w-5" /></span>
           <span>
             <span className="block text-sm font-semibold text-foreground">Aproveitamento de adesivos</span>
-            <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">Encaixe A4 e A3, confira a folha e exporte em escala 1:1.</span>
+            <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">Simule folhas A4/A3, áreas de vinil e quantidade por metro.</span>
           </span>
           <Maximize2 className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition group-hover:text-primary" />
         </button>
@@ -563,15 +610,18 @@ function StickerCalculatorDialog({ isAdmin = false }) {
       <DialogContent className="font-body grid max-h-[96dvh] w-[calc(100%_-_1rem)] max-w-7xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl p-4 sm:p-6">
         <DialogHeader className="pr-8 text-left">
           <DialogTitle className="flex items-center gap-2 font-body text-xl font-semibold tracking-normal"><Sticker className="h-5 w-5 text-primary" /> Calculadora de aproveitamento de adesivos</DialogTitle>
-          <DialogDescription className="font-body text-sm leading-relaxed">Compare encaixes mistos e rotação localmente; os limites são os vetores reais da área vermelha nos modelos A4 e A3 enviados.</DialogDescription>
+          <DialogDescription className="font-body text-sm leading-relaxed">Escolha folhas A4/A3, uma área configurável ou o cálculo por metro do vinil.</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 overflow-y-auto pr-1">
-          <div className="mb-4 grid grid-cols-2 border-b border-border" role="tablist" aria-label="Tipo de cálculo de adesivos">
+          <div className="mb-4 grid grid-cols-3 border-b border-border" role="tablist" aria-label="Tipo de cálculo de adesivos">
             <button type="button" role="tab" aria-selected={calcMode === "sheet"} onClick={() => setCalcMode("sheet")} className={`border-b-2 px-3 py-3 text-left font-body text-sm font-semibold tracking-normal ${calcMode === "sheet" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
               Folhas A4 / A3
             </button>
-            <button type="button" role="tab" aria-selected={calcMode === "roll"} onClick={() => setCalcMode("roll")} className={`border-b-2 px-3 py-3 text-left font-body text-sm font-semibold tracking-normal ${calcMode === "roll" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-              Bobina por metro
+            <button type="button" role="tab" aria-selected={calcMode === "area"} onClick={() => setCalcMode("area")} className={`border-b-2 px-3 py-3 text-left font-body text-sm font-semibold tracking-normal ${calcMode === "area" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+              Calcular por área
+            </button>
+            <button type="button" role="tab" aria-selected={calcMode === "meter"} onClick={() => setCalcMode("meter")} className={`border-b-2 px-3 py-3 text-left font-body text-sm font-semibold tracking-normal ${calcMode === "meter" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+              Calcular por metro
             </button>
           </div>
           {calcMode === "sheet" ? (
@@ -720,12 +770,50 @@ function StickerCalculatorDialog({ isAdmin = false }) {
               </section>
             </div>
           </div>
+          ) : calcMode === "area" ? (
+            <div className="grid gap-4 xl:grid-cols-[minmax(300px,390px)_minmax(0,1fr)]">
+              <div className="space-y-4">
+                <section className="border border-border bg-card p-4">
+                  <h3 className="font-body text-base font-semibold tracking-normal">Tamanho dos adesivos</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Informe o tamanho de cada adesivo e o espaço entre eles para descobrir quantos cabem na área escolhida.</p>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <Field label="Largura do adesivo" value={widthCm} onChange={setWidthCm} min={0.5} max={100} step={0.01} suffix="cm" required />
+                    <Field label="Altura do adesivo" value={heightCm} onChange={setHeightCm} min={0.5} max={100} step={0.01} suffix="cm" required />
+                    <Field label="Espaço entre adesivos" value={config.gapMm} onChange={(value) => changeConfig("gapMm", value)} min={0} max={50} step={0.01} suffix="mm" />
+                    <Field label="Largura da área" value={areaWidthCm} onChange={setAreaWidthCm} min={1} max={300} step={0.1} suffix="cm" required />
+                    <Field label="Altura da área" value={areaHeightCm} onChange={setAreaHeightCm} min={1} max={1000} step={0.1} suffix="cm" required />
+                  </div>
+                  <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-sm">
+                    <input type="checkbox" checked={config.allowRotation} onChange={(event) => changeConfig("allowRotation", event.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />
+                    <span><span className="font-semibold">Permitir rotação de 90°</span><span className="mt-0.5 block text-xs text-muted-foreground">O cálculo compara as duas orientações para aproveitar melhor a área.</span></span>
+                  </label>
+                </section>
+                <section className="border border-primary/25 bg-primary/5 p-4" aria-live="polite">
+                  <h3 className="font-body text-base font-semibold tracking-normal">Resultado da área</h3>
+                  {areaLayout ? <>
+                    <p className="mt-2 text-3xl font-bold tracking-normal text-primary">Cabem {areaLayout.count} adesivos</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Em uma área de {areaWidthCm} × {areaHeightCm} cm, com {mm(gapMm)} mm de espaço entre eles.</p>
+                    <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-primary/15 pt-3 text-sm">
+                      <span className="text-muted-foreground">Adesivos por fileira</span><strong>{areaLayout.columns}</strong>
+                      <span className="text-muted-foreground">Fileiras</span><strong>{areaLayout.rows}</strong>
+                      <span className="text-muted-foreground">Orientação</span><strong>{areaLayout.rotated ? "Girados 90°" : "Original"}</strong>
+                    </div>
+                  </> : <p className="mt-2 text-sm text-muted-foreground">Confira as medidas: o adesivo precisa caber na área informada.</p>}
+                </section>
+              </div>
+              <section className="border border-border bg-card p-4">
+                <h3 className="font-body text-base font-semibold tracking-normal">Prévia do encaixe na área</h3>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">A visualização mostra a proporção da área e a posição de cada adesivo.</p>
+                {areaLayout ? <RollPreview layout={areaLayout} rollWidthMm={Number(areaWidthCm) * 10} artwork={artwork} label={`área de ${areaWidthCm} × ${areaHeightCm} cm`} /> : <div className="mt-3 grid min-h-48 place-items-center border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">Informe medidas válidas para ver quantos adesivos cabem.</div>}
+                {areaLayout?.count > areaLayout.placements.length && <p className="mt-2 text-xs text-muted-foreground">Prévia limitada a 1.200 adesivos para manter a tela rápida; o total considera a área inteira.</p>}
+              </section>
+            </div>
           ) : (
             <div className="grid gap-4 xl:grid-cols-[minmax(300px,390px)_minmax(0,1fr)]">
               <div className="space-y-4">
                 <section className="border border-border bg-card p-4">
                   <h3 className="font-body text-base font-semibold tracking-normal">Arquivo do adesivo</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Envie a arte final em PNG ou PSD. O arquivo já cortado no tamanho correto é repetido na bobina sem novo enquadramento.</p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Envie a arte final em PNG ou PSD. O arquivo já cortado no tamanho correto será repetido no vinil sem novo enquadramento.</p>
                   <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 border border-dashed border-input px-3 py-3 text-sm font-semibold transition hover:border-primary hover:bg-primary/5">
                     <Upload className="h-4 w-4" /> {artwork ? "Trocar arquivo" : "Escolher PNG ou PSD"}
                     <input type="file" accept=".png,.psd,image/png" onChange={handleArtworkUpload} className="sr-only" />
@@ -739,52 +827,53 @@ function StickerCalculatorDialog({ isAdmin = false }) {
                 </section>
 
                 <section className="border border-border bg-card p-4">
-                  <h3 className="font-body text-base font-semibold tracking-normal">Medidas e espaçamento</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">Informe a quantidade e a largura útil da bobina.</p>
+                  <h3 className="font-body text-base font-semibold tracking-normal">Vinil e medidas</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">A largura útil do vinil é definida pela equipe no painel. Informe quantos metros quer simular; a quantidade do pedido é opcional.</p>
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     <Field label="Largura do adesivo" value={widthCm} onChange={setWidthCm} min={0.5} max={100} step={0.01} suffix="cm" required />
                     <Field label="Altura do adesivo" value={heightCm} onChange={setHeightCm} min={0.5} max={100} step={0.01} suffix="cm" required />
-                    <Field label="Quantidade desejada" value={desiredQuantity} onChange={setDesiredQuantity} min={1} max={20000} step={1} suffix="un." required />
-                    <Field label="Largura da bobina" value={rollWidthCm} onChange={setRollWidthCm} min={1} max={300} step={0.1} suffix="cm" required />
+                    <Field label="Metros de vinil para simular" value={availableMeters} onChange={setAvailableMeters} min={0.01} max={1000} step={0.01} suffix="m" required />
+                    <Field label="Quantidade do pedido (opcional)" value={desiredQuantity} onChange={setDesiredQuantity} min={1} max={20000} step={1} suffix="un." ariaLabel="Quantidade desejada de adesivos, opcional" />
                     <Field label="Espaço entre adesivos" value={config.gapMm} onChange={(value) => changeConfig("gapMm", value)} min={0} max={50} step={0.01} suffix="mm" />
                     <Field label="Margem lateral" value={rollSideMarginMm} onChange={setRollSideMarginMm} min={0} max={200} step={0.1} suffix="mm" />
                   </div>
+                  <p className="mt-3 border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">Largura útil cadastrada: <strong className="text-foreground">{vinylWidthCm} cm</strong></p>
                   <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-sm">
                     <input type="checkbox" checked={config.allowRotation} onChange={(event) => changeConfig("allowRotation", event.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />
                     <span><span className="font-semibold">Permitir rotação de 90°</span><span className="mt-0.5 block text-xs text-muted-foreground">A ferramenta escolhe a orientação que consome menos material.</span></span>
                   </label>
                 </section>
 
-                {rollLayout ? <section className="border border-primary/25 bg-primary/5 p-4">
-                  <h3 className="font-body text-base font-semibold tracking-normal">Consumo estimado da bobina</h3>
-                  <p className="mt-2 text-3xl font-bold tracking-normal text-primary">{rollLayout.linearMeters.toFixed(2).replace(".", ",")} m lineares</p>
-                  <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-primary/15 pt-3 text-sm">
-                    <span className="text-muted-foreground">Área consumida</span><strong>{(rollLayout.areaMm2 / 1_000_000).toFixed(3).replace(".", ",")} m²</strong>
-                    <span className="text-muted-foreground">Área das artes</span><strong>{(rollLayout.placements.length * Number(widthCm) * Number(heightCm) / 10000).toFixed(3).replace(".", ",")} m²</strong>
+                {meterCapacity ? <section className="border border-primary/25 bg-primary/5 p-4" aria-live="polite">
+                  <h3 className="font-body text-base font-semibold tracking-normal">Quantos cabem no vinil informado?</h3>
+                  <p className="mt-2 text-3xl font-bold tracking-normal text-primary">{meterCapacity.count} adesivos</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Em {Number(availableMeters).toLocaleString("pt-BR")} {Number(availableMeters) === 1 ? "metro" : "metros"} de vinil com {vinylWidthCm} cm de largura útil.</p>
+                  {wanted > 0 && rollLayout && <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-primary/15 pt-3 text-sm">
+                    <span className="text-muted-foreground">Quantidade do pedido</span><strong>{wanted} adesivos</strong>
+                    <span className="text-muted-foreground">Comprimento necessário</span><strong>{rollLayout.linearMeters.toFixed(2).replace(".", ",")} m</strong>
                     <span className="text-muted-foreground">Adesivos por fileira</span><strong>{rollLayout.columns}</strong>
-                    <span className="text-muted-foreground">Fileiras</span><strong>{rollLayout.rows}</strong>
-                    <span className="text-muted-foreground">Orientação escolhida</span><strong>{rollLayout.rotated ? "Girados 90°" : "Original"}</strong>
-                  </div>
-                  {rollLayout && <div className="mt-4 border border-primary/20 bg-background p-3" aria-live="polite">
-                    <span className="block text-xs text-muted-foreground">Orçamento estimado</span>
-                    {hasRollPrices ? <strong className="mt-1 block text-2xl text-primary">{money(rollQuote)}</strong> : <p className="mt-1 text-sm text-muted-foreground">Valor ainda não configurado. Consulte a equipe.</p>}
-                    {isAdmin && hasRollPrices && <span className="mt-1 block text-xs text-muted-foreground">Consumo de {rollLayout.linearMeters.toFixed(2).replace(".", ",")} m · mínimo aplicado conforme configuração.</span>}
+                    <span className="text-muted-foreground">Fileiras do pedido</span><strong>{rollLayout.rows}</strong>
                   </div>}
-                </section> : <p className="border border-amber-300 bg-amber-50 p-3 text-sm leading-relaxed text-amber-900">Preencha uma quantidade válida e confira se o adesivo cabe na largura útil da bobina. O limite deste cálculo é 20.000 unidades por vez.</p>}
+                  <div className="mt-4 border border-primary/20 bg-background p-3" aria-live="polite">
+                    <span className="block text-xs text-muted-foreground">{wanted > 0 ? "Orçamento estimado do pedido" : "Valor estimado do comprimento informado"}</span>
+                    {hasRollPrices ? <strong className="mt-1 block text-2xl text-primary">{money(rollQuote)}</strong> : <p className="mt-1 text-sm text-muted-foreground">Valor ainda não configurado. Consulte a equipe.</p>}
+                    {isAdmin && hasRollPrices && <span className="mt-1 block text-xs text-muted-foreground">O cálculo aplica a cobrança mínima configurada quando necessário.</span>}
+                  </div>
+                </section> : <p className="border border-amber-300 bg-amber-50 p-3 text-sm leading-relaxed text-amber-900">Confira se o adesivo cabe na largura útil do vinil e no comprimento informado. O cálculo aceita pedidos de até 20.000 unidades.</p>}
               </div>
 
               <div className="space-y-4">
                 <section className="border border-border bg-card p-4">
-                  <h3 className="font-body text-base font-semibold tracking-normal">Prévia do encaixe na bobina</h3>
+                  <h3 className="font-body text-base font-semibold tracking-normal">Prévia do encaixe no vinil</h3>
                   <p className="mt-1 text-sm leading-relaxed text-muted-foreground">A escala do desenho é proporcional. Rosa: contornos individuais para corte.</p>
-                  {rollLayout ? <RollPreview layout={rollLayout} rollWidthMm={Number(rollWidthCm) * 10} artwork={artwork} /> : <div className="mt-3 grid min-h-48 place-items-center border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">Informe as medidas, a quantidade e a largura da bobina para ver o encaixe.</div>}
-                  {rollLayout && rollLayout.placements.length > 1200 && <p className="mt-2 text-xs text-muted-foreground">Prévia limitada às primeiras 1.200 unidades; máscara inclui todas as {rollLayout.placements.length}.</p>}
+                  {meterCapacity ? <RollPreview layout={wanted > 0 && rollLayout ? rollLayout : meterCapacity} rollWidthMm={vinylWidthCm * 10} artwork={artwork} label="vinil" /> : <div className="mt-3 grid min-h-48 place-items-center border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">Informe o tamanho do adesivo e os metros de vinil para ver quantos cabem.</div>}
+                  {(meterCapacity?.count > 1200 || rollLayout?.count > 1200) && <p className="mt-2 text-xs text-muted-foreground">Prévia limitada aos primeiros 1.200 adesivos para manter a tela rápida.</p>}
                 </section>
                 <section className="border border-border bg-card p-4">
                   <h3 className="font-body text-base font-semibold tracking-normal">Máscara para corte</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Baixe um SVG em tamanho real com uma linha vetorial retangular para cada adesivo. A arte não vai nesta máscara.</p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Informe uma quantidade de pedido para gerar a máscara SVG em tamanho real. A arte não vai nesta máscara.</p>
                   <Button type="button" onClick={exportRollMask} disabled={!rollLayout || Boolean(busy)} className="mt-3 gap-2 rounded-none"><Download className="h-4 w-4" />Baixar máscara de corte SVG</Button>
-                  {rollLayout && <p className="mt-2 text-xs text-muted-foreground">Bobina: {mm(Number(rollWidthCm) * 10)} mm de largura × {mm(rollLayout.lengthMm)} mm de comprimento. Confira escala e cor de corte no software da máquina.</p>}
+                  {rollLayout && <p className="mt-2 text-xs text-muted-foreground">Vinil: {mm(vinylWidthCm * 10)} mm de largura útil × {mm(rollLayout.lengthMm)} mm de comprimento. Confira escala e cor de corte no software da máquina.</p>}
                 </section>
               </div>
             </div>

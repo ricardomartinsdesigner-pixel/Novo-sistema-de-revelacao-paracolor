@@ -94,6 +94,18 @@
     "shipping_flat": {
       "type": "number"
     },
+    "sticker_price_a4": {
+      "type": "number"
+    },
+    "sticker_price_a3": {
+      "type": "number"
+    },
+    "sticker_price_per_meter": {
+      "type": "number"
+    },
+    "sticker_minimum_charge": {
+      "type": "number"
+    },
     "hero_title": {
       "type": "string"
     },

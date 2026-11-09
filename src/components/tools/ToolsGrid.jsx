@@ -80,7 +80,7 @@ function ToolSection({ icon: Icon, title, description, children }) {
   );
 }
 
-export default function ToolsGrid({ onNavigate }) {
+export default function ToolsGrid({ onNavigate, isAdmin = false }) {
   const { settings } = useSettings();
   const showPolaroidMounter = publicPageEnabled(settings, "module_polaroid_batch_mounter");
   const showOrderCalculator = publicPageEnabled(settings, "page_simulador");
@@ -97,7 +97,7 @@ export default function ToolsGrid({ onNavigate }) {
       <ToolSection icon={Images} title="Fotos e impressão" description="Confira a qualidade, organize imagens e prepare materiais para impressão.">
         <ImageQualityTool />
         <PhotoDuplicateOrganizerTool onNavigate={onNavigate} />
-        <StickerCalculatorTool />
+        <StickerCalculatorTool isAdmin={isAdmin} />
         {showPolaroidMounter && (
           <Link
             to="/montador-polaroides"

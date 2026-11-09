@@ -4,6 +4,7 @@ import ToolsGrid from "@/components/tools/ToolsGrid";
 import PhotoOrderCalculator from "@/components/pricing/PhotoOrderCalculator";
 import PolaroidBatchMounter from "@/components/tools/PolaroidBatchMounter";
 import PickupQrSettings from "@/components/admin/PickupQrSettings";
+import StickerQuoteSettings from "@/components/admin/StickerQuoteSettings";
 
 export const Route = createFileRoute("/admin/ferramentas")({
   head: () => ({ meta: [{ title: "Ferramentas — Paracolor" }] }),
@@ -40,7 +41,10 @@ function ToolsPage() {
         </div>
         <PickupQrSettings />
       </section>
-      <ToolsGrid />
+      <section className="mb-6">
+        <StickerQuoteSettings />
+      </section>
+      <ToolsGrid isAdmin />
     </div>
   );
 }

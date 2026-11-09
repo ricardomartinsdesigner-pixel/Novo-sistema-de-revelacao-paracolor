@@ -7,6 +7,7 @@ import {
 import {
   calculatePaperComparison, STICKER_SHEET_PROFILES,
 } from "@/lib/sticker-layout";
+import { useSettings } from "@/lib/store";
 
 const STORAGE_KEY = "paracolor-sticker-calculator-config-v1";
 const LEGACY_DEFAULT_GAP_MM = 0.1;
@@ -26,6 +27,8 @@ const mm = (value) => Number(value || 0).toFixed(2).replace(".", ",");
 const cm = (valueMm) => `${(valueMm / 10).toFixed(2).replace(".", ",")} cm`;
 const ptPerMm = 72 / 25.4;
 const fileStem = (profile) => `paracolor-montagem-adesivos-${profile.id.toLowerCase()}`;
+const money = (value) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
+const hasPrice = (value) => value !== null && value !== undefined && String(value).trim() !== "" && Number.isFinite(Number(value)) && Number(value) >= 0;
 
 function mergeConfig(value) {
   const mergeSides = (input) => Object.fromEntries(SHEETS.map((id) => [id, { ...EMPTY_SIDES(), ...(input?.[id] || {}) }]));
@@ -287,7 +290,8 @@ async function setPngResolution(blob, dpi) {
   return new Blob([output], { type: "image/png" });
 }
 
-function StickerCalculatorDialog() {
+function StickerCalculatorDialog({ isAdmin = false }) {
+  const { settings } = useSettings();
   const [calcMode, setCalcMode] = useState("sheet");
   const [sheetId, setSheetId] = useState("A4");
   const [widthCm, setWidthCm] = useState("5");
@@ -401,6 +405,10 @@ function StickerCalculatorDialog() {
   const sheetQuantity = wanted || layout?.count || 0;
   const sheetCount = layout && sheetQuantity ? Math.ceil(sheetQuantity / layout.count) : 0;
   const lastSheetCount = sheetCount ? sheetQuantity - (sheetCount - 1) * layout.count : 0;
+  const sheetPriceKey = sheetId === "A4" ? "sticker_price_a4" : "sticker_price_a3";
+  const sheetPrice = settings?.[sheetPriceKey];
+  const hasSheetPrice = hasPrice(sheetPrice);
+  const sheetQuote = Math.round(sheetCount * Number(sheetPrice || 0) * 100) / 100;
   const rollLayout = useMemo(() => {
     const quantity = Math.floor(Number(desiredQuantity) || 0);
     const rollWidth = Number(rollWidthCm) * 10;
@@ -410,6 +418,12 @@ function StickerCalculatorDialog() {
     if (!(quantity > 0 && quantity <= 20000 && rollWidth > 0 && stickerWidth >= 5 && stickerHeight >= 5)) return null;
     return calculateRollLayout({ quantity, rollWidthMm: rollWidth, stickerWidthMm: stickerWidth, stickerHeightMm: stickerHeight, gapMm: Number(config.gapMm) || 0, sideMarginMm: sideMargin, allowRotation: config.allowRotation });
   }, [desiredQuantity, rollWidthCm, widthCm, heightCm, rollSideMarginMm, config.gapMm, config.allowRotation]);
+  const meterPrice = settings?.sticker_price_per_meter;
+  const minimumCharge = settings?.sticker_minimum_charge;
+  const hasRollPrices = hasPrice(meterPrice) && hasPrice(minimumCharge);
+  const rollQuote = rollLayout && hasRollPrices
+    ? Math.round(Math.max(rollLayout.linearMeters * Number(meterPrice), Number(minimumCharge)) * 100) / 100
+    : null;
   const displayedCount = layout ? (wanted ? Math.min(wanted, layout.count) : layout.count) : 0;
   const placements = layout?.placements.slice(0, displayedCount) || [];
   const previewPlacements = placements.slice(0, 1200);
@@ -644,8 +658,8 @@ function StickerCalculatorDialog() {
                   <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-y border-primary/15 py-3 text-sm">
                     <span className="text-muted-foreground">Quantidade do pedido</span><strong>{sheetQuantity} adesivos</strong>
                     <span className="text-muted-foreground">Folhas necessárias</span><strong>{sheetCount}</strong>
-                    <span className="text-muted-foreground">Adesivos na última folha</span><strong>{lastSheetCount}</strong>
-                    <span className="text-muted-foreground">Espaços livres na última</span><strong>{layout.count - lastSheetCount}</strong>
+                    {isAdmin && <><span className="text-muted-foreground">Adesivos na última folha</span><strong>{lastSheetCount}</strong>
+                    <span className="text-muted-foreground">Espaços livres na última</span><strong>{layout.count - lastSheetCount}</strong></>}
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
                     <span className="text-muted-foreground">Folha</span><strong>{profile.id} · {mm(profile.widthMm)} × {mm(profile.heightMm)} mm</strong>
@@ -653,11 +667,16 @@ function StickerCalculatorDialog() {
                     <span className="text-muted-foreground">Orientação</span><strong>{layout.orientation}</strong>
                     <span className="text-muted-foreground">Espaçamento</span><strong>{mm(Number(config.gapMm))} mm entre bordas</strong>
                     <span className="text-muted-foreground">Área ocupada pelos adesivos</span><strong>{(includedArea / 100).toFixed(2).replace(".", ",")} cm²</strong>
-                    <span className="text-muted-foreground">Área útil desperdiçada</span><strong>{(wastedArea / 100).toFixed(2).replace(".", ",")} cm²</strong>
+                    {isAdmin && <><span className="text-muted-foreground">Área livre estimada</span><strong>{(wastedArea / 100).toFixed(2).replace(".", ",")} cm²</strong>
                     <span className="text-muted-foreground">Aproveitamento da montagem</span><strong>{usedUtilization.toFixed(1).replace(".", ",")}%</strong>
-                    <span className="text-muted-foreground">Melhor aproveitamento encontrado</span><strong>{layout.utilization.toFixed(1).replace(".", ",")}%</strong>
+                    <span className="text-muted-foreground">Melhor aproveitamento encontrado</span><strong>{layout.utilization.toFixed(1).replace(".", ",")}%</strong></>}
                   </div>
                   {wanted > 0 && <p role="status" className="mt-3 text-xs leading-relaxed text-muted-foreground">O PDF será gerado com {sheetCount} {sheetCount === 1 ? "folha" : "folhas"} e {sheetQuantity} adesivos, distribuídos de acordo com a capacidade calculada.</p>}
+                  {wanted > 0 && <div className="mt-4 border border-primary/20 bg-background p-3" aria-live="polite">
+                    <span className="block text-xs text-muted-foreground">Orçamento estimado</span>
+                    {hasSheetPrice ? <strong className="mt-1 block text-2xl text-primary">{money(sheetQuote)}</strong> : <p className="mt-1 text-sm text-muted-foreground">Valor ainda não configurado. Consulte a equipe.</p>}
+                    {isAdmin && hasSheetPrice && <span className="mt-1 block text-xs text-muted-foreground">{sheetCount} {sheetCount === 1 ? "folha" : "folhas"} × {money(Number(sheetPrice))}</span>}
+                  </div>}
                 </section>
               )}
             </div>
@@ -746,6 +765,11 @@ function StickerCalculatorDialog() {
                     <span className="text-muted-foreground">Fileiras</span><strong>{rollLayout.rows}</strong>
                     <span className="text-muted-foreground">Orientação escolhida</span><strong>{rollLayout.rotated ? "Girados 90°" : "Original"}</strong>
                   </div>
+                  {rollLayout && <div className="mt-4 border border-primary/20 bg-background p-3" aria-live="polite">
+                    <span className="block text-xs text-muted-foreground">Orçamento estimado</span>
+                    {hasRollPrices ? <strong className="mt-1 block text-2xl text-primary">{money(rollQuote)}</strong> : <p className="mt-1 text-sm text-muted-foreground">Valor ainda não configurado. Consulte a equipe.</p>}
+                    {isAdmin && hasRollPrices && <span className="mt-1 block text-xs text-muted-foreground">Consumo de {rollLayout.linearMeters.toFixed(2).replace(".", ",")} m · mínimo aplicado conforme configuração.</span>}
+                  </div>}
                 </section> : <p className="border border-amber-300 bg-amber-50 p-3 text-sm leading-relaxed text-amber-900">Preencha uma quantidade válida e confira se o adesivo cabe na largura útil da bobina. O limite deste cálculo é 20.000 unidades por vez.</p>}
               </div>
 
@@ -771,6 +795,6 @@ function StickerCalculatorDialog() {
   );
 }
 
-export default function StickerCalculatorTool() {
-  return <StickerCalculatorDialog />;
+export default function StickerCalculatorTool({ isAdmin = false }) {
+  return <StickerCalculatorDialog isAdmin={isAdmin} />;
 }

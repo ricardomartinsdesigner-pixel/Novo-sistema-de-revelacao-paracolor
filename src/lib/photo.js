@@ -1,5 +1,8 @@
+import { resolutionLevel } from "./print-resolution.js";
 import { captionElement, captionFont, ensureCaptionFont } from "@/lib/caption-style";
 import { polaroidGeometry } from "@/lib/polaroid";
+import { detectImageOrientation, printDimensionsForSize } from "@/lib/print-orientation";
+import { applyPhotoColorPixels, PHOTO_COLOR_EFFECTS, photoColorEffect } from "./photo-color-effects.js";
 
 export function loadImage(src) {
   return new Promise((resolve, reject) => {
@@ -96,10 +99,7 @@ export function qualityFor(photo) {
   const dpiW = photo.w / (printW / 2.54);
   const dpiH = photo.h / (printH / 2.54);
   const dpi = Math.round(Math.min(dpiW, dpiH));
-  if (dpi >= 300) return { level: "excelente", dpi, label: "Excelente" };
-  if (dpi >= 200) return { level: "adequada", dpi, label: "Adequada" };
-  if (dpi >= 150) return { level: "baixa", dpi, label: "Baixa" };
-  return { level: "insuficiente", dpi, label: "Insuficiente" };
+  return { ...resolutionLevel(dpi), dpi };
 }
 
 // Região do arquivo original que aparece impressa, já considerando o giro
@@ -336,82 +336,121 @@ function outputSize(widthCm, heightCm, dpi) {
  * e a resolução de saída. Sem corte real cadastrado, usa a medida comercial.
  */
 export function sizePrintInfo(size) {
-  const widthCm = Number(size?.print_width_cm) || Number(size?.width_cm) || 10;
-  const heightCm = Number(size?.print_height_cm) || Number(size?.height_cm) || 15;
+  const { widthCm, heightCm } = printDimensionsForSize(size);
   const dpi = Number(size?.dpi) || 300;
   return { widthCm, heightCm, dpi };
 }
 
-export function drawPhoto(ctx, image, photo, outW, outH) {
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, outW, outH);
-  const inset = photo.border ? Math.round(Math.min(outW, outH) * 0.045) : 0;
-  const fw = outW - inset * 2;
-  const fh = outH - inset * 2;
-  const aspect = fw / fh;
+export function photoSizeMetrics(size, mode, photo = {}) {
+  const { widthCm, heightCm, dpi } = sizePrintInfo(size);
+  const sourceOrientation = detectImageOrientation(photo.w, photo.h);
+
+  if (mode === "polaroid") {
+    const captionAreaEnabled = size?.has_caption !== false;
+    const geo = polaroidGeometry(size, captionAreaEnabled);
+    return {
+      wCm: geo.width,
+      hCm: geo.height,
+      captionAreaEnabled,
+      aspect: 1,
+      printW: geo.side,
+      printH: geo.side,
+      dpi,
+      sourceOrientation,
+      printOrientation: detectImageOrientation(geo.width, geo.height),
+    };
+  }
+
+  if (size?.is_photo_3x4) {
+    return {
+      wCm: 3.1,
+      hCm: 4.1,
+      aspect: 3.1 / 4.1,
+      printW: 3.1,
+      printH: 4.1,
+      dpi,
+      sourceOrientation,
+      printOrientation: "portrait",
+    };
+  }
+
+  const print = printDimensionsForSize(size, sourceOrientation);
+  return {
+    wCm: print.widthCm,
+    hCm: print.heightCm,
+    aspect: print.widthCm / print.heightCm,
+    printW: print.widthCm,
+    printH: print.heightCm,
+    dpi,
+    sourceOrientation,
+    printOrientation: print.orientation,
+  };
+}
+
+function drawImageArea(ctx, image, photo, x, y, width, height) {
   const layout = computeLayout({
     imgW: image.naturalWidth,
     imgH: image.naturalHeight,
-    aspect,
+    aspect: width / height,
     zoom: photo.zoom || 1,
     rotation: photo.rotation || 0,
     fit: photo.fit || "cover",
   });
-  const scaleToPx = fw / layout.frameW;
+  const scaleToPx = width / layout.frameW;
   const drawW = layout.drawW * scaleToPx;
   const drawH = layout.drawH * scaleToPx;
-  const cx = outW / 2 + (photo.ox || 0) * fw;
-  const cy = outH / 2 + (photo.oy || 0) * fh;
+  const cx = x + width / 2 + (photo.ox || 0) * width;
+  const cy = y + height / 2 + (photo.oy || 0) * height;
+  const effect = PHOTO_COLOR_EFFECTS[photoColorEffect(photo.colorEffect)];
+  const nativeFilter = typeof ctx.filter === "string";
 
   ctx.save();
   ctx.beginPath();
-  ctx.rect(inset, inset, fw, fh);
+  ctx.rect(x, y, width, height);
   ctx.clip();
   ctx.translate(cx, cy);
   ctx.rotate(((photo.rotation || 0) * Math.PI) / 180);
   ctx.scale(photo.flipH ? -1 : 1, photo.flipV ? -1 : 1);
   ctx.imageSmoothingQuality = "high";
+  if (nativeFilter) ctx.filter = effect.filter;
   ctx.drawImage(image, -drawW / 2, -drawH / 2, drawW, drawH);
+  ctx.restore();
+
+  if (effect.matrix && !nativeFilter) {
+    const imageData = ctx.getImageData(x, y, width, height);
+    applyPhotoColorPixels(imageData.data, effect.matrix);
+    ctx.putImageData(imageData, x, y);
+  }
+}
+
+function drawPaper(ctx, color, width, height) {
+  // O papel fica atrás da foto para que o efeito alcance só a imagem,
+  // inclusive no caminho que transforma diretamente os pixels.
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-over";
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, width, height);
   ctx.restore();
 }
 
-export function drawPolaroid(ctx, image, photo, outW, outH, model) {
-  const frameColor = model?.frame_color || "#ffffff";
-  ctx.fillStyle = frameColor;
-  ctx.fillRect(0, 0, outW, outH);
+export function drawPhoto(ctx, image, photo, outW, outH) {
+  const inset = photo.border ? Math.round(Math.min(outW, outH) * 0.045) : 0;
+  drawImageArea(ctx, image, photo, inset, inset, outW - inset * 2, outH - inset * 2);
+  drawPaper(ctx, "#ffffff", outW, outH);
+}
 
-  // Área da foto sempre quadrada — a mesma medida usada na prévia e no recorte.
-  const geo = polaroidGeometry(model ?? { width_cm: photo.wCm, height_cm: photo.hCm });
+export function drawPolaroid(ctx, image, photo, outW, outH, model) {
+  const captionAreaEnabled = model?.has_caption !== false;
+  const geo = polaroidGeometry(model ?? { width_cm: photo.wCm, height_cm: photo.hCm }, captionAreaEnabled);
   const marginX = Math.round((geo.marginX / geo.width) * outW);
   const marginTop = Math.round((geo.marginTop / geo.height) * outH);
-  const photoSide = Math.round((geo.side / geo.width) * outW);
+  const photoW = Math.round((geo.side / geo.width) * outW);
+  const photoH = Math.round((geo.photoHeight / geo.height) * outH);
   const gap = Math.round((geo.gap / geo.height) * outH);
-  const captionArea = model?.has_caption === false ? 0 : Math.round((geo.caption / geo.height) * outH);
+  const captionArea = captionAreaEnabled ? Math.round((geo.caption / geo.height) * outH) : 0;
 
-  const layout = computeLayout({
-    imgW: image.naturalWidth,
-    imgH: image.naturalHeight,
-    aspect: 1,
-    zoom: photo.zoom || 1,
-    rotation: photo.rotation || 0,
-    fit: photo.fit || "cover",
-  });
-  const scaleToPx = photoSide / layout.frameW;
-  const drawW = layout.drawW * scaleToPx;
-  const drawH = layout.drawH * scaleToPx;
-  const cx = marginX + photoSide / 2 + (photo.ox || 0) * photoSide;
-  const cy = marginTop + photoSide / 2 + (photo.oy || 0) * photoSide;
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(marginX, marginTop, photoSide, photoSide);
-  ctx.clip();
-  ctx.translate(cx, cy);
-  ctx.rotate(((photo.rotation || 0) * Math.PI) / 180);
-  ctx.scale(photo.flipH ? -1 : 1, photo.flipV ? -1 : 1);
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(image, -drawW / 2, -drawH / 2, drawW, drawH);
-  ctx.restore();
+  drawImageArea(ctx, image, photo, marginX, marginTop, photoW, photoH);
+  drawPaper(ctx, model?.frame_color || "#ffffff", outW, outH);
 
   const caption = (photo.caption || "").trim();
   if (caption && captionArea > 0) {
@@ -442,7 +481,7 @@ export function drawPolaroid(ctx, image, photo, outW, outH, model) {
     const lineHeight = size * 1.25;
     const glyphHeight = glyph ? lineHeight * 0.9 : 0;
     const totalHeight = lines.length * lineHeight + glyphHeight;
-    const blockTop = marginTop + photoSide + gap + (captionArea - totalHeight) / 2;
+    const blockTop = marginTop + photoH + gap + (captionArea - totalHeight) / 2;
     if (glyph) {
       ctx.font = `${Math.round(size * 0.8)}px ${family}`;
       ctx.fillText(glyph, baseX, blockTop + glyphHeight / 2, maxWidth);
@@ -455,14 +494,14 @@ export function drawPolaroid(ctx, image, photo, outW, outH, model) {
   }
 }
 
-export function photoAspectForPolaroid() {
-  // Toda polaroide tem área de foto quadrada, em qualquer tamanho de papel.
-  return 1;
+export function photoAspectForPolaroid(model, captionAreaEnabled = model?.has_caption !== false) {
+  const geo = polaroidGeometry(model, captionAreaEnabled);
+  return geo.side / geo.photoHeight;
 }
 
 export async function canvasFromPhoto(photo, image, model) {
-  const widthCm = photo.wCm || 10;
-  const heightCm = photo.hCm || 15;
+  const widthCm = photo.printW || photo.wCm || 10;
+  const heightCm = photo.printH || photo.hCm || 15;
   const dpi = Number(photo.dpi) || 300;
   const { outW, outH } = outputSize(widthCm, heightCm, dpi);
   const canvas = document.createElement("canvas");
@@ -475,6 +514,48 @@ export async function canvasFromPhoto(photo, image, model) {
   } else {
     drawPhoto(ctx, image, photo, outW, outH);
   }
+  return canvas;
+}
+
+/**
+ * Monta doze retratos 3×4 em uma folha de 15,2 × 13,5 cm.
+ * As fotos ficam com 3,1 × 4,1 cm e folga de 3,2 mm entre elas.
+ */
+export async function canvasFromPhoto34Sheet(photo, image) {
+  const sheetWidthCm = 15.2;
+  const sheetHeightCm = 13.5;
+  const photoWidthCm = 3.1;
+  const photoHeightCm = 4.1;
+  const gapCm = 0.32;
+  const dpi = 300;
+  const { outW, outH } = outputSize(sheetWidthCm, sheetHeightCm, dpi);
+  const canvas = document.createElement("canvas");
+  canvas.width = outW;
+  canvas.height = outH;
+  const ctx = canvas.getContext("2d");
+  const pxPerCmX = outW / sheetWidthCm;
+  const pxPerCmY = outH / sheetHeightCm;
+  const photoW = photoWidthCm * pxPerCmX;
+  const photoH = photoHeightCm * pxPerCmY;
+  const gapX = gapCm * pxPerCmX;
+  const gapY = gapCm * pxPerCmY;
+  const left = (outW - (photoW * 4 + gapX * 3)) / 2;
+  const top = (outH - (photoH * 3 + gapY * 2)) / 2;
+
+  for (let row = 0; row < 3; row += 1) {
+    for (let column = 0; column < 4; column += 1) {
+      drawImageArea(
+        ctx,
+        image,
+        { ...photo, border: false },
+        left + column * (photoW + gapX),
+        top + row * (photoH + gapY),
+        photoW,
+        photoH,
+      );
+    }
+  }
+  drawPaper(ctx, "#ffffff", outW, outH);
   return canvas;
 }
 

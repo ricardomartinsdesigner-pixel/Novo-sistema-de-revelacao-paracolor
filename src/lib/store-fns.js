@@ -1,3 +1,14 @@
+import { needsArtApproval } from "@/lib/order-production";
+import { orderStatusAfterArtApproval } from "@/lib/order-art-status";
+import { canAccessOrder, createOrderDownload } from "@/lib/order-download.server";
+import { applyOriginalRetention, photosByPeriod, previewOriginalRetention } from "@/lib/file-retention.server";
+import { activePaymentMethods } from "./payment-provider-config.server";
+import { openProviderPayment, refreshProviderPayment } from "./payment-attempts.server";
+import { isNewOnlinePayment } from "./payment-providers";
+import { paymentTokenHash } from "./coupon-payment.server";
+import { checkCouponPaymentDeadline, lockCampaigns } from "./coupons.server";
+import { withTransaction } from "./vps/db.server";
+import { makeEntityService } from "./vps/entities.server";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
@@ -6,10 +17,17 @@ import { OrderInput, QuoteInput } from "@/lib/checkout-validation";
 import { computeCheckout } from "@/lib/checkout-pricing.server";
 import { saveCheckoutOrder } from "@/lib/checkout-orders.server";
 import { getMelhorEnvioConfig, getMercadoPagoToken } from "@/lib/integrations.server";
+import { enqueueOrderNotice, sendPendingOrderNotices } from "@/lib/order-notices.server";
+import { consultMercadoPago } from "@/lib/mercadopago-reconcile.server";
 import { notifyCustomer } from "@/lib/email.server";
+import { canUpdateOrderAsStaff, hasStaffAccess } from "@/lib/staff-access";
+import {
+  canProduceOrder, checkoutPaymentMethods, isPickupPaymentOrder, isOnlinePayment, ONLINE_PAYMENT, paymentRouting,
+} from "@/lib/order-payment";
 
 const DEFAULT_SETTINGS = {
   store_name: "Paracolor",
+  google_review_url: "",
   production_days: 3,
   auto_backup_enabled: true,
   auto_backup_time: "03:00",
@@ -19,6 +37,7 @@ const DEFAULT_SETTINGS = {
   retention_days: 90,
   retention_auto: true,
   maintenance_enabled: false,
+  allow_store_payment: true,
   shipping_enabled: false,
   shipping_flat: 0,
   pickup_info: "Retirada na loja, avisamos por e-mail e WhatsApp quando o pedido estiver pronto.",
@@ -27,13 +46,34 @@ const DEFAULT_SETTINGS = {
   wa_template_contato: "Olá! Vim pelo site da Paracolor e gostaria de falar sobre {pedido}.",
   module_revelacao: true,
   module_polaroids: true,
+  module_fotos_ima: true,
   module_banners: true,
   module_personalizados: true,
   module_molduras: true,
+  module_albuns_books: true,
   module_molduras_online: false,
   module_aprovacao_whatsapp: true,
   module_destaques: true,
   module_promocoes: true,
+  module_photo_duplicate_organizer: true,
+  module_polaroid_batch_mounter: false,
+  pickup_qr_behavior: "automatico",
+  page_home: true,
+  page_revelar: true,
+  page_polaroids_criar: true,
+  page_banner_pedido: true,
+  page_personalizado_produto: true,
+  page_album_book_produto: true,
+  page_carrinho: true,
+  page_checkout: true,
+  page_minha_conta: true,
+  page_pedido: true,
+  page_consultar_pedido: true,
+  page_simulador: true,
+  page_contato: true,
+  page_privacidade: true,
+  page_termos: true,
+  page_trocas: true,
 };
 
 function asArray(result) {
@@ -57,6 +97,7 @@ export const ensureSettings = createServerFn({ method: "GET" }).handler(async ({
   const shipping = await getMelhorEnvioConfig(base44).catch(() => ({ enabled: false }));
   return {
     ...settings,
+    allow_store_payment: settings.allow_store_payment !== false,
     online_payment_enabled: Boolean(await getMercadoPagoToken(base44)),
     shipping_quote_enabled: Boolean(shipping?.enabled),
   };
@@ -66,67 +107,125 @@ export const quoteCheckout = createServerFn({ method: "POST" })
   .middleware([requireUser])
   .validator(QuoteInput)
   .handler(async ({ data, context }) => {
-    const quote = await computeCheckout(context.getBase44().asServiceRole, data, DEFAULT_SETTINGS);
-    return { subtotal: quote.subtotal, discount: quote.discount, shipping_cost: quote.shipping_cost, shipping_label: quote.shipping_label, total: quote.total,
-      coupon_code: quote.coupon_code, items: quote.items.map(({ product_name, line_total, qty }) => ({ product_name, line_total, qty })) };
+    const base44 = context.getBase44();
+    const [quote, token, providers] = await Promise.all([
+      computeCheckout(base44.asServiceRole, data, DEFAULT_SETTINGS, context.user),
+      getMercadoPagoToken(base44),
+      activePaymentMethods(),
+    ]);
+    const payment_methods = checkoutPaymentMethods({
+      user: context.user, fulfillment: data.fulfillment, settings: quote.settings, onlineEnabled: Boolean(token), providers,
+    });
+    return {
+      subtotal: quote.subtotal, discount: quote.discount, shipping_cost: quote.shipping_cost,
+      shipping_label: quote.shipping_label, total: quote.total, coupon_code: quote.coupon_code, discount_label: quote.discount_label, payment_methods, routed_payment: paymentRouting(quote.settings).enabled,
+      items: quote.items.map(({ input, product_name, unit_price, line_total, qty }) => ({
+        product_name, unit_price, line_total, qty,
+        pricing_table: input.options.pricing_table,
+        tier_label: input.options.tier_label,
+        tier_quantity: input.options.tier_quantity,
+      })),
+    };
+  });
+
+export const quoteCartCampaign = createServerFn({ method: "POST" })
+  .validator(QuoteInput)
+  .handler(async ({ data, context }) => {
+    const quote = await computeCheckout(context.getBase44().asServiceRole, data, DEFAULT_SETTINGS, context.user);
+    return { subtotal: quote.subtotal, discount: quote.discount, label: quote.discount_label };
   });
 
 export const createOrder = createServerFn({ method: "POST" })
   .middleware([requireUser])
   .validator(OrderInput)
   .handler(async ({ data, context }) => {
+    const base44 = context.getBase44();
     const store = asArray(
-      await context.getBase44().asServiceRole.entities.Settings.list({ sort: "-created_date", limit: 1 })
+      await base44.asServiceRole.entities.Settings.list({ sort: "-created_date", limit: 1 })
     )[0];
     if (store?.maintenance_enabled) throw new Error("A loja está em manutenção e novos pedidos estão pausados.");
-    if (data.payment_method === "mercadopago" && !(await getMercadoPagoToken(context.getBase44()))) throw new Error("Pagamento online indisponível. Escolha combinar o pagamento na loja.");
-    return saveCheckoutOrder(context.getBase44(), context.user, data, DEFAULT_SETTINGS);
+    const onlineEnabled = data.payment_method === ONLINE_PAYMENT && Boolean(await getMercadoPagoToken(base44));
+    const providers = isNewOnlinePayment(data.payment_method) ? await activePaymentMethods() : [];
+    const methods = checkoutPaymentMethods({ user: context.user, fulfillment: data.fulfillment, settings: store, onlineEnabled, providers });
+    if (!methods.includes(data.payment_method)) {
+      throw new Error(isOnlinePayment(data.payment_method)
+        ? "O pagamento online está indisponível. Confira as opções de pagamento do pedido."
+        : "Esta forma de pagamento não está disponível para sua conta e forma de recebimento.");
+    }
+    return saveCheckoutOrder(base44, context.user, {
+      ...data, infinitepay_card_only: data.payment_method === "infinitepay" && paymentRouting(store).enabled,
+    }, DEFAULT_SETTINGS);
   });
+
+async function lockOrderForUpdate(db, orderId) {
+  await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 1))", [orderId]);
+}
+
+function statusEntry(user, status, note) {
+  return { status, date: new Date().toISOString(), by: user.full_name || user.email || "admin", note };
+}
+
+function requireReadyForDelivery(order, status) {
+  if (order.payment_status !== "aprovado") throw new Error("Confirme o recebimento antes de dar baixa no pedido.");
+  if (needsArtApproval(order)) {
+    throw new Error("A arte precisa ser aprovada antes de dar baixa.");
+  }
+  if (status === "enviado" && (order.fulfillment !== "entrega" || order.status !== "pronto")) {
+    throw new Error("Marque o pedido para entrega como pronto antes de registrar o envio.");
+  }
+  if (status === "retirado" && (order.fulfillment !== "retirada" || order.status !== "pronto")) {
+    throw new Error("Marque o pedido para retirada como pronto antes de registrar a baixa.");
+  }
+  if (status === "concluido" && (order.fulfillment !== "entrega" || order.status !== "enviado")) {
+    throw new Error("Registre o envio antes de confirmar a entrega.");
+  }
+}
 
 export const updateOrderStatus = createServerFn({ method: "POST" })
   .middleware([requireUser])
-  .validator(
-    z.object({
-      order_id: z.string().min(1),
-      status: z.enum(["aguardando_pagamento", "pagamento_aprovado", "aguardando_arte", "aguardando_aprovacao", "ajustes_solicitados", "arte_aprovada", "aguardando_producao", "em_producao", "aguardando_conferencia", "pronto", "enviado", "concluido", "cancelado"]),
-      note: z.string().max(400).optional(),
-    })
-  )
+  .validator(z.object({
+    order_id: z.string().min(1),
+    status: z.enum(["aguardando_pagamento", "pagamento_aprovado", "aguardando_arte", "aguardando_aprovacao", "ajustes_solicitados", "arte_aprovada", "aguardando_producao", "em_producao", "aguardando_conferencia", "pronto", "retirado", "enviado", "concluido", "cancelado"]),
+    note: z.string().max(400).optional(),
+  }))
   .handler(async ({ data, context }) => {
-    if (context.user.role !== "admin") throw new Error("Apenas administradores podem alterar o status.");
-    const role = context.getBase44().asServiceRole;
-    const order = await role.entities.Order.get(data.order_id);
-
-    const productionStatuses = ["aguardando_producao", "em_producao", "aguardando_conferencia", "pronto", "enviado", "concluido"];
-    if (productionStatuses.includes(data.status) && order.payment_status !== "aprovado") throw new Error("Confirme o pagamento antes de liberar a produção.");
-    if (
-      productionStatuses.includes(data.status) &&
-      order.art_approval_requested &&
-      order.art_approval_status !== "aprovada"
-    ) {
-      throw new Error("Este pedido precisa da aprovação da arte pelo cliente antes de ir para produção.");
-    }
-
-    const history = [
-      ...(order.status_history ?? []),
-      {
-        status: data.status,
-        date: new Date().toISOString(),
-        by: context.user.full_name || context.user.email || "admin",
-        note: data.note ?? "",
-      },
-    ];
-
-    const updated = await role.entities.Order.update(data.order_id, {
-      status: data.status,
-      status_history: history,
-      ...actorPatch(context.user),
-      ...(data.status === "pagamento_aprovado" ? { payment_status: "aprovado" } : {}),
+    if (!canUpdateOrderAsStaff(context.user, data.status)) throw new Error("Seu nível de acesso não permite alterar este status.");
+    const { status } = data;
+    const confirmingPayment = status === "pagamento_aprovado";
+    const result = await withTransaction(async (db) => {
+      if (confirmingPayment) await lockCampaigns(db);
+      await lockOrderForUpdate(db, data.order_id);
+      const orders = makeEntityService(context.user, true, db).entities.Order;
+      const order = await orders.get(data.order_id);
+      if (confirmingPayment && isOnlinePayment(order.payment_method)) {
+        throw new Error("Consulte a confirmação do provedor na área de pagamentos.");
+      }
+      if (confirmingPayment && (order.status === "cancelado" || order.payment_status === "reembolsado")) {
+        throw new Error("Este pedido não pode receber confirmação de pagamento.");
+      }
+      if (confirmingPayment ? order.payment_status === "aprovado" : order.status === status) return order;
+      if (["retirado", "concluido", "cancelado"].includes(order.status)) throw new Error("Este pedido já foi encerrado.");
+      const production = ["aguardando_producao", "em_producao", "aguardando_conferencia", "pronto"].includes(status);
+      if (production && !canProduceOrder(order)) throw new Error("Confirme o pagamento antes de liberar a produção.");
+      if (production && needsArtApproval(order)) {
+        throw new Error("Este pedido precisa da aprovação da arte antes da produção.");
+      }
+      if (["enviado", "retirado", "concluido"].includes(status)) requireReadyForDelivery(order, status);
+      if (confirmingPayment && order.coupon_pay_by) checkCouponPaymentDeadline(order);
+      const preserveStatus = confirmingPayment && isPickupPaymentOrder(order);
+      const date = new Date().toISOString();
+      const updated = await orders.update(order.id, {
+        ...(preserveStatus ? {} : { status }),
+        ...(confirmingPayment ? { payment_status: "aprovado", payment_approved_at: date } : {}),
+        status_history: [...(order.status_history ?? []), statusEntry(context.user, status,
+          data.note || (preserveStatus ? "Recebimento no balcão confirmado." : ""))],
+        ...actorPatch(context.user, date),
+      });
+      await enqueueOrderNotice(db, order.id, { pagamento_aprovado: "payment_approved", pronto: "order_ready", enviado: "shipped" }[status]);
+      return updated;
     });
-
-    const emailKind = { pagamento_aprovado: "payment_approved", pronto: "order_ready", enviado: "shipped" }[data.status];
-    if (emailKind) await notifyCustomer(context.getBase44(), updated, emailKind);
-    return updated;
+    void sendPendingOrderNotices(context.getBase44()).catch(() => {});
+    return result;
   });
 
 const QUICK_PRESETS = {
@@ -140,32 +239,38 @@ export const startQuickProduction = createServerFn({ method: "POST" })
   .middleware([requireUser])
   .validator(z.object({ order_id: z.string().min(1), preset: z.enum(["1h", "1d", "2d"]) }))
   .handler(async ({ data, context }) => {
-    if (context.user.role !== "admin") throw new Error("Apenas administradores podem alterar o status.");
-    const role = context.getBase44().asServiceRole;
-    const order = await role.entities.Order.get(data.order_id);
-    if (order.payment_status !== "aprovado") throw new Error("Confirme o pagamento antes de liberar a produção.");
-    if (order.art_approval_requested && order.art_approval_status !== "aprovada") {
-      throw new Error("Este pedido precisa da aprovação da arte pelo cliente antes de ir para produção.");
-    }
+    if (!hasStaffAccess(context.user, "production")) throw new Error("Apenas produção, gerência e administração podem liberar pedidos para produção.");
+    return withTransaction(async (db) => {
+      await lockOrderForUpdate(db, data.order_id);
+      const role = makeEntityService(context.user, true, db);
+      const order = await role.entities.Order.get(data.order_id);
+      if (["pronto", "enviado", "concluido", "cancelado"].includes(order.status)) {
+        throw new Error("O pedido já saiu da produção.");
+      }
+      if (!canProduceOrder(order)) throw new Error("Confirme o pagamento antes de liberar a produção.");
+      if (needsArtApproval(order)) {
+        throw new Error("Este pedido precisa da aprovação da arte pelo cliente antes de ir para produção.");
+      }
 
-    const preset = QUICK_PRESETS[data.preset];
-    const due = new Date(Date.now() + preset.minutes * 60 * 1000).toISOString();
-    const history = [
-      ...(order.status_history ?? []),
-      {
+      const preset = QUICK_PRESETS[data.preset];
+      const due = new Date(Date.now() + preset.minutes * 60 * 1000).toISOString();
+      const history = [
+        ...(order.status_history ?? []),
+        {
+          status: "em_producao",
+          date: new Date().toISOString(),
+          by: context.user.full_name || context.user.email || "admin",
+          note: `Em produção — prazo de ${preset.label}`,
+        },
+      ];
+
+      return role.entities.Order.update(data.order_id, {
         status: "em_producao",
-        date: new Date().toISOString(),
-        by: context.user.full_name || context.user.email || "admin",
-        note: `Em produção — prazo de ${preset.label}`,
-      },
-    ];
-
-    return role.entities.Order.update(data.order_id, {
-      status: "em_producao",
-      status_history: history,
-      quick_due_at: due,
-      quick_label: preset.label,
-      ...actorPatch(context.user),
+        status_history: history,
+        quick_due_at: due,
+        quick_label: preset.label,
+        ...actorPatch(context.user),
+      });
     });
   });
 
@@ -183,129 +288,86 @@ export const setOrderDeadline = createServerFn({ method: "POST" })
   .middleware([requireUser])
   .validator(z.object({ order_id: z.string().min(1), due_at: z.string().optional() }))
   .handler(async ({ data, context }) => {
-    if (context.user.role !== "admin") throw new Error("Apenas administradores podem alterar o prazo.");
-    const role = context.getBase44().asServiceRole;
-    const order = await role.entities.Order.get(data.order_id);
+    if (!hasStaffAccess(context.user, "production")) throw new Error("Apenas produção, gerência e administração podem alterar prazos.");
+    return withTransaction(async (db) => {
+      await lockOrderForUpdate(db, data.order_id);
+      const role = makeEntityService(context.user, true, db);
+      const order = await role.entities.Order.get(data.order_id);
+      if (["pronto", "enviado", "concluido", "cancelado"].includes(order.status)) {
+        throw new Error("O pedido já saiu da produção.");
+      }
 
-    if (!data.due_at) {
-      return role.entities.Order.update(order.id, { quick_due_at: "", quick_label: "", ...actorPatch(context.user) });
-    }
+      if (!data.due_at) {
+        return role.entities.Order.update(order.id, { quick_due_at: "", quick_label: "", ...actorPatch(context.user) });
+      }
 
-    if (order.payment_status !== "aprovado") throw new Error("Confirme o pagamento antes de definir o prazo.");
-    if (order.art_approval_requested && order.art_approval_status !== "aprovada") {
-      throw new Error("Este pedido precisa da aprovação da arte pelo cliente antes de ir para produção.");
-    }
+      if (!canProduceOrder(order)) throw new Error("Confirme o pagamento antes de definir o prazo.");
+      if (needsArtApproval(order)) {
+        throw new Error("Este pedido precisa da aprovação da arte pelo cliente antes de ir para produção.");
+      }
 
-    const due = new Date(data.due_at);
-    if (Number.isNaN(due.getTime())) throw new Error("Data inválida.");
-    if (due.getTime() <= Date.now()) throw new Error("Escolha um prazo no futuro.");
-    if (due.getTime() > Date.now() + 60 * 24 * 60 * 60 * 1000) throw new Error("O prazo máximo é de 60 dias.");
+      const due = new Date(data.due_at);
+      if (Number.isNaN(due.getTime())) throw new Error("Data inválida.");
+      if (due.getTime() <= Date.now()) throw new Error("Escolha um prazo no futuro.");
+      if (due.getTime() > Date.now() + 60 * 24 * 60 * 60 * 1000) throw new Error("O prazo máximo é de 60 dias.");
 
-    const label = deadlineLabel(due.getTime() - Date.now());
-    const formatted = due.toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "America/Sao_Paulo",
-    });
+      const label = deadlineLabel(due.getTime() - Date.now());
+      const formatted = due.toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "America/Sao_Paulo",
+      });
 
-    return role.entities.Order.update(order.id, {
-      status: "em_producao",
-      quick_due_at: due.toISOString(),
-      quick_label: label,
-      ...actorPatch(context.user),
-      status_history: [
-        ...(order.status_history ?? []),
-        {
-          status: "em_producao",
-          date: new Date().toISOString(),
-          by: context.user.full_name || context.user.email || "admin",
-          note: `Em produção — prazo definido para ${formatted}`,
-        },
-      ],
-    });
-  });
-
-// O prazo vence sozinho: quem abre a lista ou o pedido dispara esta conferência.
-export const settleQuickDeadlines = createServerFn({ method: "POST" })
-  .middleware([requireUser])
-  .handler(async ({ context }) => {
-    if (context.user.role !== "admin") throw new Error("Apenas administradores podem concluir prazos de produção.");
-    const role = context.getBase44().asServiceRole;
-    const due = await role.entities.Order.filter(
-      {
-        quick_due_at: { $lte: new Date().toISOString(), $exists: true },
-        status: { $nin: ["pronto", "enviado", "concluido", "cancelado"] },
-      },
-      { limit: 50 }
-    );
-    const expired = (due.items ?? []).filter(
-      (order) => order.quick_due_at && new Date(order.quick_due_at).getTime() <= Date.now()
-    );
-
-    for (const order of expired) {
-      await role.entities.Order.update(order.id, {
-        status: "pronto",
+      return role.entities.Order.update(order.id, {
+        status: "em_producao",
+        quick_due_at: due.toISOString(),
+        quick_label: label,
+        ...actorPatch(context.user),
         status_history: [
           ...(order.status_history ?? []),
           {
-            status: "pronto",
+            status: "em_producao",
             date: new Date().toISOString(),
-            by: "automático",
-            note: `Prazo de ${order.quick_label || "produção"} encerrado — pedido pronto`,
+            by: context.user.full_name || context.user.email || "admin",
+            note: `Em produção — prazo definido para ${formatted}`,
           },
         ],
       });
-    }
-    return { settled: expired.length };
+    });
   });
 
-// Baixa de balcão: digita o número do pedido e ele sai como entregue/retirado.
+// Encerrar o prazo destaca o atraso. Somente a equipe confirma que a produção terminou.
 export const releaseOrderByNumber = createServerFn({ method: "POST" })
   .middleware([requireUser])
   .validator(z.object({ number: z.string().trim().min(1).max(40) }))
   .handler(async ({ data, context }) => {
-    if (context.user.role !== "admin") throw new Error("Apenas administradores podem dar baixa em pedidos.");
-    const role = context.getBase44().asServiceRole;
-    const term = data.number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const page = await role.entities.Order.filter(
-      {
-        $or: [
-          { order_number: { $regex: `^${term}$`, $options: "i" } },
-          { internal_number: { $regex: `^${term}$`, $options: "i" } },
-        ],
-      },
-      { sort: "-created_date", limit: 5 }
-    );
-
-    const matches = page.items ?? [];
-    if (!matches.length) throw new Error(`Nenhum pedido encontrado com o número ${data.number}.`);
-    const order = matches.find((item) => !["cancelado", "enviado", "concluido"].includes(item.status));
-    const label = order?.internal_number || order?.order_number || matches[0].internal_number || matches[0].order_number;
-    if (!order) {
-      const closed = matches.some((item) => ["enviado", "concluido"].includes(item.status));
-      throw new Error(closed ? `O pedido ${label} já teve baixa.` : `O pedido ${label} está cancelado.`);
-    }
-    if (order.payment_status !== "aprovado") throw new Error(`Confirme o pagamento do pedido ${label} antes de dar baixa.`);
-
-    const entregue = order.fulfillment === "entrega";
-    const updated = await role.entities.Order.update(order.id, {
-      status: "concluido",
-      status_history: [
-        ...(order.status_history ?? []),
-        {
-          status: "concluido",
-          date: new Date().toISOString(),
-          by: context.user.full_name || context.user.email || "admin",
-          note: entregue ? "Baixa de pedido — entregue ao cliente" : "Baixa de pedido — retirado na loja",
-        },
-      ],
-      ...actorPatch(context.user),
+    if (!hasStaffAccess(context.user, "deliveries")) throw new Error("Apenas gerência e administração podem confirmar a retirada do pedido.");
+    return withTransaction(async (db) => {
+      const { rows } = await db.query(
+        `SELECT id FROM vps_records WHERE entity='Order'
+         AND (lower(data->>'order_number')=lower($1) OR lower(data->>'internal_number')=lower($1))
+         LIMIT 2`, [data.number],
+      );
+      if (!rows.length) throw new Error(`Nenhum pedido encontrado com o número ${data.number}.`);
+      if (rows.length > 1) throw new Error("Esse número identifica mais de um pedido. Abra o pedido correto para confirmar a baixa.");
+      const id = rows[0].id;
+      await lockOrderForUpdate(db, id);
+      const orders = makeEntityService(context.user, true, db).entities.Order;
+      const order = await orders.get(id);
+      const destination = order.fulfillment === "entrega" ? "concluido" : "retirado";
+      if (["retirado", "concluido"].includes(order.status)) throw new Error("Esse pedido já teve baixa.");
+      requireReadyForDelivery(order, destination);
+      const label = order.internal_number || order.order_number;
+      await orders.update(id, {
+        status: destination,
+        status_history: [...(order.status_history ?? []), statusEntry(context.user, destination,
+          order.fulfillment === "entrega" ? "Entrega confirmada." : "Retirada na loja confirmada.")],
+        ...actorPatch(context.user),
+      });
+      return { label, customer_name: order.customer_name, fulfillment: order.fulfillment };
     });
-
-    await notifyCustomer(context.getBase44(), updated, "shipped");
-    return { label, customer_name: order.customer_name, fulfillment: order.fulfillment };
   });
 
 export const setArtApproval = createServerFn({ method: "POST" })
@@ -319,81 +381,53 @@ export const setArtApproval = createServerFn({ method: "POST" })
     })
   )
   .handler(async ({ data, context }) => {
-    if (context.user.role !== "admin") throw new Error("Apenas administradores podem registrar a arte.");
-    const role = context.getBase44().asServiceRole;
-    const order = await role.entities.Order.get(data.order_id);
+    if (!hasStaffAccess(context.user, "art")) throw new Error("Seu nível de acesso não permite registrar ações de arte.");
+    const result = await withTransaction(async (db) => {
+      await lockOrderForUpdate(db, data.order_id);
+      const orders = makeEntityService(context.user, true, db).entities.Order;
+      const order = await orders.get(data.order_id);
+      const date = new Date().toISOString();
+      const status = data.action === "aprovada" ? orderStatusAfterArtApproval(order) : order.status;
+      const artStatus = { enviada: "aguardando", aprovada: "aprovada", ajustes: "ajustes" }[data.action];
+      if (data.action === "aprovada" && order.art_approval_status === artStatus && order.status === status
+        && !data.note && (!data.art_file_uri || data.art_file_uri === order.art_file_uri)) return order;
+      const entry = { date, action: data.action, by: context.user.full_name || context.user.email || "admin", note: data.note ?? "" };
+      const patch = {
+        art_history: [...(Array.isArray(order.art_history) ? order.art_history : []), entry],
+        art_approval_status: artStatus,
+        art_approval_requested: true,
+        ...(order.art_approval_mode === "desativada" ? { art_approval_mode: "opcional" } : {}),
+        ...(data.art_file_uri ? { art_file_uri: data.art_file_uri } : {}),
+        ...(status !== order.status ? {
+          status,
+          status_history: [...(Array.isArray(order.status_history) ? order.status_history : []),
+            { status, date, by: entry.by, note: "Aprovação de arte registrada." }],
+        } : {}),
+        ...actorPatch(context.user, date),
+      };
+      return orders.update(order.id, patch);
+    });
+    if (data.action === "enviada") await notifyCustomer(context.getBase44(), result, "art_ready");
+    return result;
+  });
 
-    const history = [
-      ...(order.art_history ?? []),
-      {
-        date: new Date().toISOString(),
-        action: data.action,
-        by: context.user.full_name || context.user.email || "admin",
-        note: data.note ?? "",
-      },
-    ];
-
-    const patch = { art_history: history, ...actorPatch(context.user) };
-    if (data.art_file_uri) patch.art_file_uri = data.art_file_uri;
-    if (data.action === "enviada" && order.art_approval_mode === "desativada") {
-      patch.art_approval_mode = "opcional";
-    }
-    if (data.action === "enviada") {
-      patch.art_approval_status = "aguardando";
-      patch.art_approval_requested = true;
-      if (["aguardando_pagamento", "pagamento_aprovado"].includes(order.status)) {
-        patch.status = "aguardando_aprovacao";
-        patch.status_history = [
-          ...(order.status_history ?? []),
-          { status: "aguardando_aprovacao", date: new Date().toISOString(), by: context.user.email ?? "admin" },
-        ];
-      }
-    }
-    if (data.action === "aprovada") {
-      patch.art_approval_status = "aprovada";
-      patch.status = "arte_aprovada";
-      patch.status_history = [
-        ...(order.status_history ?? []),
-        { status: "arte_aprovada", date: new Date().toISOString(), by: context.user.email ?? "admin" },
-      ];
-    }
-    if (data.action === "ajustes") {
-      patch.art_approval_status = "ajustes";
-      patch.status = "ajustes_solicitados";
-      patch.status_history = [
-        ...(order.status_history ?? []),
-        { status: "ajustes_solicitados", date: new Date().toISOString(), by: context.user.email ?? "admin" },
-      ];
-    }
-
-    const updated = await role.entities.Order.update(data.order_id, patch);
-    if (data.action === "enviada") await notifyCustomer(context.getBase44(), updated, "art_ready");
-    return updated;
+export const getOriginalRetentionPreview = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .handler(({ context }) => {
+    if (context.user.role !== "admin") throw new Error("Apenas administradores podem consultar a retenção.");
+    return previewOriginalRetention();
   });
 
 export const purgeOriginals = createServerFn({ method: "POST" })
   .middleware([requireUser])
-  .validator(z.object({ days: z.number().min(1).max(3650) }))
-  .handler(async ({ data, context }) => {
+  .validator(z.object({
+    days: z.number().int().min(1).max(3650),
+    cutoff: z.iso.datetime({ precision: 3 }),
+    signature: z.string().regex(/^[a-f0-9]{64}$/),
+  }))
+  .handler(({ data, context }) => {
     if (context.user.role !== "admin") throw new Error("Apenas administradores podem executar a retenção.");
-    const role = context.getBase44().asServiceRole;
-    const cutoff = new Date(Date.now() - data.days * 24 * 60 * 60 * 1000).toISOString();
-    const orders = await role.entities.Order.filter(
-      { status: { $in: ["enviado", "concluido"] }, created_date: { $lt: cutoff } },
-      { limit: 200 }
-    );
-    const ids = (orders.items ?? []).map((order) => order.id);
-    if (!ids.length) return { purged: 0, orders: 0 };
-
-    const photos = await role.entities.OrderPhoto.filter(
-      { order_id: { $in: ids }, original_file_uri: { $exists: true } },
-      { limit: 500 }
-    );
-    const targets = (photos.items ?? []).filter((photo) => photo.original_file_uri);
-    if (!targets.length) return { purged: 0, orders: ids.length };
-
-    await role.entities.OrderPhoto.bulkUpdate(targets.map((photo) => ({ id: photo.id, original_file_uri: "" })));
-    return { purged: targets.length, orders: ids.length };
+    return applyOriginalRetention(data);
   });
 
 const PeriodInput = z.object({
@@ -406,7 +440,7 @@ function periodQuery({ from, to }) {
   const start = new Date(`${from}T00:00:00.000-03:00`).toISOString();
   const end = new Date(`${to}T23:59:59.999-03:00`).toISOString();
   if (start > end) throw new Error("A data inicial precisa ser anterior à final.");
-  return { created_date: { $gte: start, $lte: end } };
+  return { start, end };
 }
 
 export const countPhotosByPeriod = createServerFn({ method: "POST" })
@@ -414,21 +448,17 @@ export const countPhotosByPeriod = createServerFn({ method: "POST" })
   .validator(PeriodInput)
   .handler(async ({ data, context }) => {
     if (context.user.role !== "admin") throw new Error("Apenas administradores podem consultar as fotos.");
-    const count = await context.getBase44().asServiceRole.entities.OrderPhoto.count(periodQuery(data));
-    return { count };
+    const { start, end } = periodQuery(data);
+    return photosByPeriod(start, end);
   });
 
 export const purgePhotosByPeriod = createServerFn({ method: "POST" })
   .middleware([requireUser])
-  .validator(PeriodInput)
+  .validator(PeriodInput.extend({ confirmation: z.literal("APAGAR"), expectedCount: z.number().int().positive() }))
   .handler(async ({ data, context }) => {
     if (context.user.role !== "admin") throw new Error("Apenas administradores podem apagar fotos.");
-    const role = context.getBase44().asServiceRole;
-    const query = periodQuery(data);
-    const total = await role.entities.OrderPhoto.count(query);
-    if (!total) return { deleted: 0 };
-    await role.entities.OrderPhoto.deleteMany(query);
-    return { deleted: total };
+    const { start, end } = periodQuery(data);
+    return photosByPeriod(start, end, data.expectedCount);
   });
 
 // Endereço da loja vem da própria requisição: nunca do que o navegador informa,
@@ -445,6 +475,9 @@ export const createPayment = createServerFn({ method: "POST" })
   .middleware([requireUser])
   .validator(z.object({ order_id: z.string().min(1) }))
   .handler(async ({ data, context }) => {
+    const role = context.getBase44().asServiceRole;
+    const order = await role.entities.Order.get(data.order_id);
+    if (isNewOnlinePayment(order.payment_method)) return openProviderPayment(context.user, order.id);
     const token = await getMercadoPagoToken(context.getBase44());
     if (!token) {
       return {
@@ -454,16 +487,33 @@ export const createPayment = createServerFn({ method: "POST" })
       };
     }
 
-    const role = context.getBase44().asServiceRole;
-    const order = await role.entities.Order.get(data.order_id);
     if (order.created_by_id !== context.user.id && context.user.role !== "admin") {
       throw new Error("Sem permissão para este pedido.");
     }
 
+    if (isPickupPaymentOrder(order)) throw new Error("O pagamento deste pedido foi combinado para a retirada na loja.");
     if (order.status === "cancelado" || ["aprovado", "reembolsado"].includes(order.payment_status)) throw new Error("Este pedido não pode receber um novo pagamento.");
     if (!(Number(order.total) > 0)) throw new Error("O total do pedido precisa ser conferido pela loja.");
+    if (order.coupon_pay_by) {
+      await withTransaction(async (db) => {
+        await lockCampaigns(db);
+        const orders = makeEntityService(context.user, true, db).entities.Order;
+        const current = await orders.get(order.id);
+        if (current.status === "cancelado" || ["aprovado", "reembolsado"].includes(current.payment_status)) {
+          throw new Error("Este pedido não pode receber um novo pagamento.");
+        }
+        checkCouponPaymentDeadline(current, true);
+        if (!current.coupon_payment_started) {
+          await orders.update(order.id, { coupon_payment_started: true, coupon_token_hash: paymentTokenHash(token) });
+        }
+      });
+    }
     const base = requestBaseUrl();
     const preference = {
+      ...(order.coupon_pay_by ? {
+        expires: true, expiration_date_from: new Date().toISOString(),
+        expiration_date_to: order.coupon_pay_by, date_of_expiration: order.coupon_pay_by,
+      } : {}),
       external_reference: order.id,
       items: [{ title: `Pedido ${order.order_number}`, quantity: 1, unit_price: Number(order.total), currency_id: "BRL" }],
       payer: { name: order.customer_name, email: order.customer_email },
@@ -496,6 +546,23 @@ export const createPayment = createServerFn({ method: "POST" })
     return { configured: true, init_point: result.init_point, sandbox_init_point: result.sandbox_init_point };
   });
 
+export const checkProviderPayment = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(z.object({
+    order_id: z.string().min(1).max(120),
+    transaction: z.string().max(150).optional(), slug: z.string().max(200).optional(), ref: z.string().max(120).optional(),
+  }))
+  .handler(async ({ data, context }) => {
+    const base44 = context.getBase44();
+    const order = await base44.asServiceRole.entities.Order.get(data.order_id);
+    if (order.created_by_id !== context.user.id && !hasStaffAccess(context.user, "payments")) throw new Error("Sem permissão para este pedido.");
+    if (order.payment_method === ONLINE_PAYMENT) return consultMercadoPago(base44, order);
+    if (!isNewOnlinePayment(order.payment_method)) throw new Error("Provedor indisponível para este pedido.");
+    // Somente a InfinitePay devolve a referência da transação para o cliente.
+    const details = order.payment_method === "infinitepay" ? data : {};
+    return refreshProviderPayment(base44, order, details);
+  });
+
 export const createDownloadLink = createServerFn({ method: "POST" })
   .middleware([requireUser])
   .validator(
@@ -508,14 +575,6 @@ export const createDownloadLink = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const role = context.getBase44().asServiceRole;
     const order = await role.entities.Order.get(data.order_id);
-    if (order.created_by_id !== context.user.id && context.user.role !== "admin") {
-      throw new Error("Sem permissão para este pedido.");
-    }
-    const token = crypto.randomUUID();
-    const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    await role.entities.Order.update(order.id, { download_token: token, download_token_expires: expires });
-    const params = new URLSearchParams({ orderId: order.id, token });
-    if (data.only) params.set("only", data.only);
-    if (data.size) params.set("size", data.size);
-    return { url: `/api/order-zip?${params.toString()}`, expires_at: expires };
+    if (!canAccessOrder(context.user, order)) throw new Error("Sem permissão para este pedido.");
+    return createOrderDownload(context.user, order, data.only || "all", data.size || "");
   });

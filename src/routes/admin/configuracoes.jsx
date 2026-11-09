@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import GithubUpdatePanel from "@/components/admin/GithubUpdatePanel";
 import BackupRestorePanel from "@/components/admin/BackupRestorePanel";
+import OrderAlertSettings from "@/components/admin/OrderAlertSettings";
 import { searchNationalHolidays } from "@/lib/holidays-fns";
 import { useSettings } from "@/lib/store";
 
@@ -50,6 +51,7 @@ function SettingsPage() {
         phone: settings.phone || "",
         email: settings.email || "",
         instagram: settings.instagram || "",
+        google_review_url: settings.google_review_url || "",
         hours: settings.hours || "",
         address: settings.address || "",
         pickup_info: settings.pickup_info || "",
@@ -139,6 +141,17 @@ function SettingsPage() {
           ))}
         </div>
         <label className="mt-4 block text-xs text-muted-foreground">
+          Link de avaliação da loja no Google
+          <input
+            type="url"
+            value={form.google_review_url}
+            onChange={(event) => setForm({ ...form, google_review_url: event.target.value })}
+            placeholder="https://g.page/r/.../review"
+            className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
+          />
+          <span className="mt-1 block text-[11px]">Cole o link de avaliação criado no Perfil da Empresa do Google. Ele será exibido em Minha conta quando o cliente tiver um pedido concluído.</span>
+        </label>
+        <label className="mt-4 block text-xs text-muted-foreground">
           Horário de funcionamento (aparece no rodapé e no estúdio; deixe vazio para ocultar)
           <textarea
             value={form.hours}
@@ -164,6 +177,7 @@ function SettingsPage() {
       </section>
 
       <GithubUpdatePanel />
+      <OrderAlertSettings />
       <BackupRestorePanel settings={settings} />
 
       <section className="card-glass p-5">

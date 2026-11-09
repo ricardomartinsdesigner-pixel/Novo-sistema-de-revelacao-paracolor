@@ -1,5 +1,6 @@
 import { createReadStream, createWriteStream } from "node:fs";
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto";
 import { createGzip, createGunzip } from "node:zlib";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -21,15 +22,70 @@ const TABLES = {
   vps_otps: { order: "email,purpose", columns: ["email", "purpose", "code_hash", "payload", "expires_at", "attempts"], json: ["payload"] },
   vps_files: { order: "id", columns: ["id", "owner_id", "visibility", "original_name", "mime_type", "byte_size", "created_at"], json: [] },
   vps_rate_limits: { order: "key", columns: ["key", "window_started_at", "hits"], json: [] },
+  vps_site_visitor_daily: { order: "visit_day,visitor_id", columns: ["visitor_id", "visit_day", "pageviews", "last_pageview_at"], json: [] },
+  vps_site_presence: { order: "visitor_id", columns: ["visitor_id", "last_seen_at"], json: [] },
 };
 
 const RUNTIME_CONFIG_KEYS = [
-  "APP_VERSION", "APP_DOMAIN", "PUBLIC_APP_URL", "DATABASE_URL", "SESSION_SECRET", "SESSION_COOKIE_SECURE", "DATABASE_SSL", "DB_POOL_SIZE",
-  "STORAGE_DIR", "BACKUP_DIR", "MAX_UPLOAD_MB", "MAX_BACKUP_MB", "BOOTSTRAP_ADMIN_EMAIL", "BOOTSTRAP_ADMIN_PASSWORD", "BOOTSTRAP_ADMIN_NAME",
-  "MERCADO_PAGO_ACCESS_TOKEN", "MERCADO_PAGO_WEBHOOK_SECRET", "MELHOR_ENVIO_TOKEN", "MELHOR_ENVIO_CONTACT_EMAIL",
-  "MELHOR_ENVIO_PACKAGE_WIDTH", "MELHOR_ENVIO_PACKAGE_HEIGHT", "MELHOR_ENVIO_PACKAGE_LENGTH", "MELHOR_ENVIO_PACKAGE_WEIGHT", "GITHUB_REPOSITORY", "GITHUB_TOKEN",
-  "SMTP_HOST", "SMTP_PORT", "SMTP_SECURE", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM", "SMTP_FROM_NAME",
+  "APP_VERSION", "APP_DOMAIN", "PUBLIC_APP_URL", "SESSION_COOKIE_SECURE", "DATABASE_SSL", "DB_POOL_SIZE",
+  "MAX_UPLOAD_MB", "MAX_BACKUP_MB", "SECURITY_HSTS", "PAYMENTS_SANDBOX_MODE", "GITHUB_REPOSITORY",
 ];
+const BACKUP_MAGIC = Buffer.from("PARACOLOR-BACKUP-2\n");
+const IV_SIZE = 12;
+const TAG_SIZE = 16;
+const STORED_NAME = /^(pre-restore|auto)-[\w-]+\.(?:parabackup|tar\.gz)$/;
+
+function backupKey() {
+  const dedicated = process.env.BACKUP_ENCRYPTION_KEY;
+  if (dedicated && !/^[a-f\d]{64}$/i.test(dedicated)) throw new Error("BACKUP_ENCRYPTION_KEY precisa ter 64 caracteres hexadecimais.");
+  const material = dedicated ? Buffer.from(dedicated, "hex") : Buffer.from(process.env.SESSION_SECRET || "");
+  if (material.length < 32) throw new Error("Configure a chave de backup no servidor.");
+  return hkdfSync("sha256", material, "Paracolor backup v2", "archive", 32);
+}
+
+async function encryptBackup(archive, destination) {
+  const iv = randomBytes(IV_SIZE);
+  const header = Buffer.concat([BACKUP_MAGIC, iv]);
+  const cipher = createCipheriv("aes-256-gcm", backupKey(), iv);
+  cipher.setAAD(header);
+  const output = createWriteStream(destination, { mode: 0o600, flags: "wx" });
+  async function* framed(source) {
+    yield header;
+    yield* source;
+    yield cipher.getAuthTag();
+  }
+  await pipeline(createReadStream(archive), cipher, framed, output);
+}
+
+async function decodeBackup(filePath, destination) {
+  const file = await open(filePath, "r");
+  let header, tag, length;
+  try {
+    const magic = Buffer.alloc(BACKUP_MAGIC.length);
+    await file.read(magic, 0, magic.length, 0);
+    if (!magic.equals(BACKUP_MAGIC)) return filePath;
+    length = (await file.stat()).size;
+    header = Buffer.alloc(BACKUP_MAGIC.length + IV_SIZE);
+    tag = Buffer.alloc(TAG_SIZE);
+    if (length <= header.length + tag.length) throw new Error("Arquivo de backup incompleto.");
+    await file.read(header, 0, header.length, 0);
+    await file.read(tag, 0, tag.length, length - tag.length);
+  } finally {
+    await file.close();
+  }
+  const decipher = createDecipheriv("aes-256-gcm", backupKey(), header.subarray(BACKUP_MAGIC.length));
+  decipher.setAAD(header);
+  decipher.setAuthTag(tag);
+  await mkdir(destination, { recursive: true });
+  const archive = path.join(destination, ".decoded.tar.gz");
+  try {
+    await pipeline(createReadStream(filePath, { start: header.length, end: length - tag.length - 1 }),
+      decipher, createWriteStream(archive, { mode: 0o600 }));
+  } catch {
+    throw new Error("Backup alterado ou chave de backup incorreta.");
+  }
+  return archive;
+}
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -100,7 +156,7 @@ async function makeBackupBundle(destination) {
       format: "paracolor-full-backup",
       format_version: 1,
       created_at: new Date().toISOString(),
-      app_version: process.env.APP_VERSION || "1.0.6",
+      app_version: process.env.APP_VERSION || "1.12.23",
       includes: ["postgresql application data", "uploaded files", "runtime configuration snapshot"],
     };
     await writeFile(path.join(workDir, "manifest.json"), JSON.stringify(manifest, null, 2), { mode: 0o600 });
@@ -109,7 +165,11 @@ async function makeBackupBundle(destination) {
     await run("tar", ["-czf", path.join(workDir, "uploads.tar.gz"), "-C", STORAGE_DIR, "."]);
     const runtimeConfig = Object.fromEntries(RUNTIME_CONFIG_KEYS.filter((key) => process.env[key] !== undefined).map((key) => [key, process.env[key]]));
     await writeFile(path.join(workDir, "runtime-config.json"), JSON.stringify(runtimeConfig, null, 2), { mode: 0o600 });
-    await run("tar", ["-czf", destination, "-C", workDir, "manifest.json", "database.ndjson.gz", "uploads.tar.gz", "runtime-config.json"]);
+    const archive = path.join(workDir, "backup.tar.gz");
+    await run("tar", ["-czf", archive, "-C", workDir, "manifest.json", "database.ndjson.gz", "uploads.tar.gz", "runtime-config.json"]);
+    const sealed = path.join(workDir, "backup.parabackup");
+    await encryptBackup(archive, sealed);
+    await rename(sealed, destination);
   } finally {
     await rm(workDir, { recursive: true, force: true }).catch(() => {});
   }
@@ -117,9 +177,10 @@ async function makeBackupBundle(destination) {
 
 async function extractBackup(archivePath, destination) {
   const expected = new Set(["manifest.json", "database.ndjson.gz", "uploads.tar.gz", "runtime-config.json"]);
-  await validateTar(archivePath, expected);
+  const archive = await decodeBackup(archivePath, destination);
+  await validateTar(archive, expected);
   await mkdir(destination, { recursive: true });
-  await run("tar", ["-xzf", archivePath, "-C", destination, "--no-same-owner", "--no-same-permissions"]);
+  await run("tar", ["-xzf", archive, "-C", destination, "--no-same-owner", "--no-same-permissions"]);
   const manifest = JSON.parse(await readFile(path.join(destination, "manifest.json"), "utf8"));
   if (manifest.format !== "paracolor-full-backup" || manifest.format_version !== 1) throw new Error("Formato ou versão de backup não reconhecido.");
   await validateTar(path.join(destination, "uploads.tar.gz"));
@@ -158,7 +219,7 @@ async function restoreDatabaseSnapshot(filePath) {
   const batches = Object.fromEntries(Object.keys(TABLES).map((table) => [table, []]));
   try {
     await client.query("BEGIN");
-    await client.query("TRUNCATE vps_records, vps_otps, vps_files, vps_rate_limits RESTART IDENTITY");
+    await client.query("TRUNCATE vps_records, vps_otps, vps_files, vps_rate_limits, vps_site_visitor_daily, vps_site_presence RESTART IDENTITY");
     const input = createReadStream(filePath).pipe(createGunzip());
     const lines = createInterface({ input, crlfDelay: Infinity });
     for await (const line of lines) {
@@ -188,7 +249,7 @@ export function backupDirectory() {
 export async function createDownloadBackup() {
   await mkdir(BACKUP_DIR, { recursive: true });
   const workDir = await mkdtemp(path.join(BACKUP_DIR, ".export-"));
-  const archivePath = path.join(workDir, `Paracolor-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.tar.gz`);
+  const archivePath = path.join(workDir, `Paracolor-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.parabackup`);
   try {
     await makeBackupBundle(archivePath);
     return { archivePath, workDir };
@@ -201,7 +262,7 @@ export async function createDownloadBackup() {
 export async function listRestoreBackups() {
   await mkdir(BACKUP_DIR, { recursive: true });
   const files = await readdir(BACKUP_DIR);
-  const all = await Promise.all(files.filter((name) => /^(pre-restore|auto)-[\w-]+\.tar\.gz$/.test(name)).map(async (name) => {
+  const all = await Promise.all(files.filter((name) => STORED_NAME.test(name)).map(async (name) => {
     const details = await stat(path.join(BACKUP_DIR, name));
     return { name, size: details.size, created_at: details.mtime.toISOString(), type: name.startsWith("auto-") ? "automatic" : "before_restore" };
   }));
@@ -217,7 +278,7 @@ export async function restoreBackupFromUpload(archivePath, restoreConfirmation) 
   try {
     await mkdir(BACKUP_DIR, { recursive: true });
     stagingDir = await mkdtemp(path.join(BACKUP_DIR, ".restore-"));
-    const safetyArchive = path.join(BACKUP_DIR, `pre-restore-${new Date().toISOString().replace(/[:.]/g, "-")}.tar.gz`);
+    const safetyArchive = path.join(BACKUP_DIR, `pre-restore-${new Date().toISOString().replace(/[:.]/g, "-")}.parabackup`);
     await mkdir(BACKUP_DIR, { recursive: true });
     const uploadedDir = path.join(stagingDir, "uploaded");
     const manifest = await extractBackup(archivePath, uploadedDir);
@@ -256,7 +317,7 @@ export async function receiveBackupUpload(request, destination) {
 }
 
 export async function downloadStoredBackup(name) {
-  if (!/^(pre-restore|auto)-[\w-]+\.tar\.gz$/.test(name)) return null;
+  if (!STORED_NAME.test(name)) return null;
   const filePath = path.join(BACKUP_DIR, name);
   try { await stat(filePath); return filePath; }
   catch { return null; }
@@ -282,7 +343,7 @@ async function runScheduledBackup() {
     const clock = saoPauloClock();
     if (clock.time < scheduledTime) return;
     await mkdir(BACKUP_DIR, { recursive: true });
-    destination = path.join(BACKUP_DIR, `auto-${clock.date}.tar.gz`);
+    destination = path.join(BACKUP_DIR, `auto-${clock.date}.parabackup`);
     try { await stat(destination); return; }
     catch (error) { if (error.code !== "ENOENT") throw error; }
     await makeBackupBundle(destination);
@@ -307,7 +368,7 @@ export function startBackupScheduler() {
 export async function setBackupDownloadHeaders(filePath, storedName) {
   const details = await stat(filePath);
   return {
-    "content-type": "application/gzip",
+    "content-type": storedName.endsWith(".parabackup") ? "application/octet-stream" : "application/gzip",
     "content-length": String(details.size),
     "content-disposition": `attachment; filename="${storedName.replace(/["\r\n]/g, "")}"`,
     "cache-control": "no-store, private",

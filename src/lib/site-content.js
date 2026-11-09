@@ -1,4 +1,4 @@
-import { AREAS, HERO_IMAGE } from "@/lib/areas";
+import { AREAS, HERO_IMAGE, STUDIO_COVER_FALLBACK } from "@/lib/areas";
 
 /**
  * Registry of every editable text and image of the public site.
@@ -10,7 +10,7 @@ const AREA_FIELDS = AREAS.flatMap((area) => [
   { key: `area.${area.key}.label`, label: `Nome da área — ${area.label}`, default: area.label },
   { key: `area.${area.key}.tagline`, label: `Descrição — ${area.label}`, type: "textarea", default: area.tagline },
   { key: `area.${area.key}.cta`, label: `Chamada do botão — ${area.label}`, default: area.cta },
-  { key: `area.${area.key}.image`, label: `Foto — ${area.label}`, type: "image", default: area.image },
+  { key: `area.${area.key}.image`, label: `Foto — ${area.label}`, type: "image", default: area.image, hint: `Imagem de destaque da área ${area.label}.`, pixelSpec: "1200 × 900 px (proporção 4:3), mínimo recomendado; mantenha o assunto principal no centro." },
 ]);
 
 export const CONTENT_GROUPS = [
@@ -18,12 +18,12 @@ export const CONTENT_GROUPS = [
     id: "brand",
     label: "Logomarca, favicon e rodapé",
     fields: [
-      { key: "brand.logo", label: "Logomarca do site", type: "image", hint: "PNG com fundo transparente, exibida no topo do site." },
-      { key: "brand.favicon", label: "Favicon (ícone da aba do navegador)", type: "image", hint: "Imagem quadrada, de preferência 512 x 512 px." },
+      { key: "brand.logo", label: "Logomarca do site", type: "image", hint: "PNG com fundo transparente, exibida no topo do site.", pixelSpec: "800 × 200 px (proporção 4:1), recomendado; versão PNG transparente." },
+      { key: "brand.favicon", label: "Favicon (ícone da aba do navegador)", type: "image", hint: "Imagem quadrada para a aba do navegador.", pixelSpec: "512 × 512 px (proporção 1:1), recomendado." },
       { key: "brand.tagline", label: "Assinatura ao lado da logomarca", default: "laboratório fotográfico" },
       { key: "brand.footer_text", label: "Texto institucional do rodapé", type: "textarea", default: "Laboratório fotográfico e ateliê de impressão. Suas memórias impressas com cuidado, do celular para o papel." },
       { key: "nav.servicos", label: "Nome do link de Serviços no menu", default: "Serviços" },
-      { key: "nav.estudio", label: "Nome do link do Estúdio no menu", default: "Estúdio" },
+      { key: "nav.estudio", label: "Nome do link do Estúdio no menu", default: "Estúdio Fotográfico" },
     ],
   },
   {
@@ -34,20 +34,21 @@ export const CONTENT_GROUPS = [
       { key: "home.hero.title", label: "Título (uma linha por linha)", type: "textarea", default: "Suas memórias\nmerecem" },
       { key: "home.hero.highlight", label: "Palavra destacada em dourado", default: "papel" },
       { key: "home.hero.subtitle", label: "Texto do topo", type: "textarea", default: "Revelação de fotos, polaroids com legenda e banners impressos com qualidade de laboratório. Você envia, ajusta o enquadramento e a gente imprime — do jeito que você viu na tela." },
-      { key: "home.hero.image", label: "Foto principal do topo", type: "image", default: HERO_IMAGE },
+      { key: "home.hero.image", label: "Foto principal do topo", type: "image", default: HERO_IMAGE, pixelSpec: "1600 × 1300 px (proporção 16:13), mínimo recomendado; mantenha o assunto no centro, pois o enquadramento muda no celular." },
       { key: "home.hero.meta1_label", label: "Destaque 1 — rótulo", default: "Papel fotográfico" },
       { key: "home.hero.meta1_value", label: "Destaque 1 — valor", default: "300 DPI de verdade" },
       { key: "home.hero.meta2_label", label: "Destaque 2 — rótulo", default: "Prévia do corte" },
       { key: "home.hero.meta2_value", label: "Destaque 2 — valor", default: "Fiel ao impresso" },
       { key: "home.hero.meta3_label", label: "Destaque 3 — rótulo", default: "Seus arquivos" },
       { key: "home.hero.meta3_value", label: "Destaque 3 — valor", default: "Privados e temporários" },
+      { key: "home.hero.seal_outer_text", label: "Selo giratório — texto circular", default: "PARACOLOR · DESDE 1994", hint: "Texto ao redor do selo da página inicial. Use uma frase curta para caber bem no círculo." },
+      { key: "home.hero.seal_year", label: "Selo giratório — texto central", default: "1994", hint: "Texto exibido no centro do selo da página inicial." },
     ],
   },
   {
     id: "trust",
     label: "Selos de confiança (abaixo do topo)",
     fields: [
-      { key: "home.trust1.title", label: "Selo 1 — título", default: "Pronto em até {dias} dias úteis", hint: "Use {dias} para o prazo de produção configurado." },
       { key: "home.trust1.text", label: "Selo 1 — texto", default: "Produção e conferência manual antes do aviso de retirada" },
       { key: "home.trust2.title", label: "Selo 2 — título", default: "Retirada na loja" },
       { key: "home.trust2.text", label: "Selo 2 — texto", default: "Avisamos você assim que o pedido estiver pronto" },
@@ -164,8 +165,8 @@ export const CONTENT_GROUPS = [
       { key: "home.studio.eyebrow", label: "Atalho do estúdio — chamada", default: "Estúdio fotográfico" },
       { key: "home.studio.title", label: "Atalho do estúdio — título", default: "Sua história contada em ensaio" },
       { key: "home.studio.text", label: "Atalho do estúdio — texto", type: "textarea", default: "São 6 estúdios totalmente equipados, atendimento por ordem de chegada e você paga apenas as fotos que escolher." },
-      { key: "home.studio.cta", label: "Atalho do estúdio — botão", default: "Conheça o Estúdio" },
-      { key: "home.studio.image", label: "Atalho do estúdio — foto", type: "image", hint: "Foto real do estúdio. Sem foto cadastrada, o cartão aparece sem imagem." },
+      { key: "home.studio.cta", label: "Atalho do estúdio — botão", default: "Conheça o Estúdio Fotográfico" },
+      { key: "home.studio.image", label: "Atalho do estúdio — foto", type: "image", hint: "Foto real do estúdio exibida no cartão da página inicial.", pixelSpec: "1200 × 900 px (proporção 4:3), mínimo recomendado; mantenha o assunto no centro." },
       { key: "home.parking.text", label: "Destaque de estacionamento na home", default: "Estacionamento próprio ao lado da loja." },
     ],
   },
@@ -188,10 +189,10 @@ export const CONTENT_GROUPS = [
     fields: [
       { key: "page.estudio.title", label: "Título da página", default: "Estúdio Fotográfico" },
       { key: "page.estudio.text", label: "Apresentação do estúdio", type: "textarea", default: "Um estúdio dentro da Paracolor para registrar o que você quer lembrar: a equipe acompanha o ensaio, você escolhe as fotos com calma e sai com elas impressas no mesmo lugar." },
-      { key: "page.estudio.cover", label: "Imagem de capa", type: "image", hint: "Foto real do estúdio. Sem capa cadastrada, a página abre direto na apresentação." },
+      { key: "page.estudio.cover", label: "Imagem de capa — foto de fundo do topo", type: "image", default: STUDIO_COVER_FALLBACK, hint: "Esta é a foto de fundo grande que aparece atrás do título no topo da página do Estúdio. A prévia mostra a imagem atual; envie outra e salve o conteúdo para substituí-la.", pixelSpec: "1920 × 1400 px (aprox. 4:3), recomendado; deixe o assunto principal centralizado para evitar cortes no celular." },
       { key: "page.estudio.cover_alt", label: "Descrição da capa (acessibilidade)", default: "Estúdio fotográfico da Paracolor" },
-      { key: "page.estudio.highlight_image", label: "Faixa “6 estúdios” — foto de fundo", type: "image", default: "https://media.base44.com/images/public/6aebd7693f7d30fc2024dc02/c190e344f_generated_3df8c815.jpg" },
-      { key: "page.estudio.backstage", label: "Bastidores (foto abaixo das galerias)", type: "image", default: "https://media.base44.com/images/public/6aebd7693f7d30fc2024dc02/70fd07908_generated_6d4896fb.jpg" },
+      { key: "page.estudio.highlight_image", label: "Faixa “6 estúdios” — foto de fundo", type: "image", default: "/loja/estudio-destaque.webp", pixelSpec: "1920 × 840 px (proporção aproximada 2,3:1), recomendado; mantenha o assunto no centro." },
+      { key: "page.estudio.backstage", label: "Bastidores (foto abaixo das galerias)", type: "image", default: "/loja/estudio-bastidores.webp", hint: "A imagem aparece inteira e mantém a proporção original; a altura do quadro acompanha a foto sem achatá-la ou cortá-la.", pixelSpec: "1920 × 640 px (proporção 3:1), recomendado; a imagem é exibida inteira e o quadro acompanha a proporção original, sem corte nem achatamento." },
       { key: "page.estudio.benefit1.title", label: "Diferencial 1 — título", default: "Não precisa de agendamento" },
       { key: "page.estudio.benefit1.text", label: "Diferencial 1 — texto", type: "textarea", default: "Atendimento por ordem de chegada. Mais liberdade para você!" },
       { key: "page.estudio.benefit2.title", label: "Diferencial 2 — título", default: "Fotos ilimitadas" },
@@ -220,10 +221,10 @@ export const CONTENT_GROUPS = [
       { key: "page.revelacao.cta", label: "Revelação — botão principal", default: "Enviar minhas fotos" },
       { key: "page.polaroids.eyebrow", label: "Polaroids — chamada", default: "Polaroids" },
       { key: "page.polaroids.title", label: "Polaroids — título", default: "Aquela foto instantânea, com a sua letra" },
-      { key: "page.polaroids.text", label: "Polaroids — texto", type: "textarea", default: "Escolha o modelo de moldura, ajuste o enquadramento e escreva a legenda direto na área branca. O texto faz parte do arquivo final — não fica só na tela." },
+      { key: "page.polaroids.text", label: "Polaroids — texto", type: "textarea", default: "Escolha o modelo de moldura, ajuste o enquadramento na própria polaroide e escreva na faixa inferior ou amplie a foto para ocupar esse espaço." },
       { key: "page.polaroids.cta", label: "Polaroids — botão principal", default: "Criar minhas polaroids" },
       { key: "page.polaroids.list_title", label: "Polaroids — título dos modelos", default: "Modelos de moldura" },
-      { key: "page.polaroids.list_note", label: "Polaroids — texto ao lado dos modelos", type: "textarea", default: "Cada prévia mostra a proporção real do papel impresso: a área da foto é sempre quadrada e o excedente da altura fica reservado para a legenda." },
+      { key: "page.polaroids.list_note", label: "Polaroids — texto ao lado dos modelos", type: "textarea", default: "A prévia mostra a moldura real. No editor, escolha manter a faixa inferior para legenda ou ampliar a foto até perto da borda." },
       { key: "page.banners.eyebrow", label: "Banners — chamada", default: "Banners" },
       { key: "page.banners.title", label: "Banners — título", default: "Sua marca impressa em grande" },
       { key: "page.banners.text", label: "Banners — texto", type: "textarea", default: "Lonas, faixas e banners promocionais com tamanho padrão ou personalizado, cálculo por metro quadrado e acabamento do jeito que você precisa." },
@@ -235,7 +236,13 @@ export const CONTENT_GROUPS = [
       { key: "page.personalizados.eyebrow", label: "Personalizados — chamada", default: "Loja de personalizados" },
       { key: "page.personalizados.title", label: "Personalizados — título", default: "Objetos do dia a dia com as suas fotos" },
       { key: "page.personalizados.text", label: "Personalizados — texto de abertura", type: "textarea", default: "Canecas, almofadas, porta-retratos e muito mais. Você envia a foto, escreve o texto e a gente produz." },
-      { key: "page.personalizados.image", label: "Personalizados — foto de abertura", type: "image", hint: "Sem foto aqui, aparece a foto cadastrada na área Personalizados." },
+      { key: "page.personalizados.image", label: "Personalizados — foto de abertura", type: "image", hint: "Se não enviar uma imagem aqui, o site usa a foto cadastrada na área Personalizados.", pixelSpec: "1200 × 900 px (proporção 4:3), mínimo recomendado; mantenha o produto principal no centro." },
+      { key: "page.fotos_ima.sample_image", label: "Fotos Ímã — foto de amostra", type: "image", hint: "Imagem exibida na abertura da página de Fotos Ímã. Você pode enviar ou trocar a foto a qualquer momento.", pixelSpec: "1200 × 900 px (proporção 4:3), recomendado; mostre os ímãs em uma composição clara e centralizada." },
+      { key: "page.fotos_ima.sample_image_alt", label: "Fotos Ímã — descrição da foto de amostra", default: "Exemplos de fotos ímã personalizadas da Paracolor" },
+      { key: "page.molduras.sample_image", label: "Molduras — foto de amostra", type: "image", hint: "Imagem exibida na abertura da página de Molduras. Você pode enviar ou trocar a foto a qualquer momento.", pixelSpec: "1200 × 900 px (proporção 4:3), recomendado; mostre uma foto emoldurada em um ambiente bem iluminado." },
+      { key: "page.molduras.sample_image_alt", label: "Molduras — descrição da foto de amostra", default: "Exemplo de foto emoldurada da Paracolor" },
+      { key: "page.albuns_books.image", label: "Álbuns e Books — foto ao lado do título", type: "image", hint: "Esta imagem aparece ao lado do título na abertura da vitrine de Álbuns e Books.", pixelSpec: "1200 × 900 px (proporção 4:3), recomendado; mantenha o álbum ou book no centro." },
+      { key: "page.albuns_books.image_alt", label: "Álbuns e Books — descrição da foto", default: "Álbuns e books fotográficos da Paracolor" },
       { key: "page.molduras.eyebrow", label: "Molduras — chamada", default: "Vitrine" },
       { key: "page.molduras.title", label: "Molduras — título", default: "Molduras" },
       { key: "page.molduras.text", label: "Molduras — texto", type: "textarea", default: "Modelos, cores e tamanhos para dar acabamento às suas fotos favoritas. Consulte disponibilidade pelo WhatsApp." },
@@ -258,6 +265,26 @@ export const CONTENT_DEFAULTS = Object.fromEntries(
 export const IMAGE_KEYS = new Set(CONTENT_FIELDS.filter((field) => field.type === "image").map((field) => field.key));
 
 /** Replaces {tokens} inside editable copy with live store values. */
+const defaultMedia = "https://media.base44.com/images/public/6aebd7693f7d30fc2024dc02/";
+const OLD_CONTENT_DEFAULTS = {
+  "area.revelacao.image": [defaultMedia + "9057474b8_generated_c016e18b.png"],
+  "area.polaroid.image": [defaultMedia + "5d00b9c29_generated_10711ebd.png"],
+  "area.banner.image": [defaultMedia + "1d8a2815a_generated_1ad407e5.png"],
+  "area.personalizado.image": [defaultMedia + "6826100ce_generated_00c45475.png"],
+  "area.moldura.image": [defaultMedia + "316be45c4_generated_93d09dca.png"],
+  "home.hero.image": [defaultMedia + "52dc2aa3d_generated_a9f3a6ca.png"],
+  "page.estudio.cover": [defaultMedia + "9deffabe8_generated_067660f7.jpg"],
+  "page.estudio.highlight_image": [defaultMedia + "c190e344f_generated_3df8c815.jpg"],
+  "page.estudio.backstage": [defaultMedia + "70fd07908_generated_6d4896fb.jpg"],
+  "nav.estudio": ["Estúdio"],
+  "home.studio.cta": ["Conheça o Estúdio"],
+};
+
+export function updatedContentValue(key, value) {
+  if (!Object.hasOwn(OLD_CONTENT_DEFAULTS, key) || typeof value !== "string") return value;
+  return OLD_CONTENT_DEFAULTS[key].includes(value.trim()) ? CONTENT_DEFAULTS[key] : value;
+}
+
 export function fillVars(text, vars = {}) {
   if (!text) return "";
   return text.replace(/\{(\w+)\}/g, (match, token) => (vars[token] ?? match));

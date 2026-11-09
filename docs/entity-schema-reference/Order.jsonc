@@ -72,11 +72,13 @@
       "type": "string",
       "enum": [
         "mercadopago",
-        "retirada"
+        "retirada",
+        "pagar_na_retirada"
       ],
       "enumColors": [
         "blue",
-        "yellow"
+        "yellow",
+        "orange"
       ],
       "default": "mercadopago"
     },
@@ -115,6 +117,7 @@
         "em_producao",
         "aguardando_conferencia",
         "pronto",
+        "retirado",
         "enviado",
         "concluido",
         "cancelado"
@@ -131,11 +134,15 @@
         "gray",
         "blue",
         "purple",
+        "purple",
         "green",
         "red"
       ],
       "default": "aguardando_pagamento"
     },
+    "pickup_qr_token": { "type": "string" },
+    "pickup_qr_redeemed_at": { "type": "string" },
+    "pickup_qr_redeemed_by": { "type": "string" },
     "quick_due_at": {
       "type": "string"
     },
@@ -242,6 +249,18 @@
     },
     "download_token_expires": {
       "type": "string"
+    },
+    "customer_professional": {
+      "type": "boolean",
+      "default": false
+    },
+    "pricing_table": {
+      "type": "string",
+      "enum": [
+        "normal",
+        "profissional"
+      ],
+      "default": "normal"
     }
   },
   "required": [
@@ -263,7 +282,9 @@
       ]
     },
     "create": {
-      "created_by_id": "{{user.id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "update": {
       "user_condition": {

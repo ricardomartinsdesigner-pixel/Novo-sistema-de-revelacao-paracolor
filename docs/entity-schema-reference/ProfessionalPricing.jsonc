@@ -1,0 +1,134 @@
+{
+  "name": "ProfessionalPricing",
+  "type": "object",
+  "properties": {
+    "draft": {
+      "type": "object",
+      "properties": {
+        "tiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "min_qty": {
+                "type": "number"
+              },
+              "max_qty": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "prices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tier_id": {
+                "type": "string"
+              },
+              "size_id": {
+                "type": "string"
+              },
+              "unit_price": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "shared_size_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "published": {
+      "type": "object",
+      "properties": {
+        "tiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "min_qty": {
+                "type": "number"
+              },
+              "max_qty": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "prices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tier_id": {
+                "type": "string"
+              },
+              "size_id": {
+                "type": "string"
+              },
+              "unit_price": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "shared_size_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "published_at": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "draft",
+    "revision"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

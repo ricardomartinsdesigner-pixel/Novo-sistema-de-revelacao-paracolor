@@ -2,11 +2,10 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { FileText, ImagePlus, Loader2, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart";
-import { loadImage } from "@/lib/photo";
-import { ART_ACCEPT, isPdfFile, prepareUploads } from "@/lib/upload-formats";
+import { usePrivateImageUploads } from "@/hooks/use-private-image-uploads";
+import { ART_ACCEPT } from "@/lib/upload-formats";
 import { uid } from "@/lib/uid";
 import { formatBRL } from "@/lib/areas";
 import { useSettings } from "@/lib/store";
@@ -17,14 +16,16 @@ export default function ProductCustomizer({ product }) {
   const { addItems } = useCart();
   const { settings } = useSettings();
   const navigate = useNavigate();
-  const photoFields = product.photo_fields?.length
+  const customizable = product.customizable !== false;
+  const photoFields = !customizable ? [] : product.photo_fields?.length
     ? product.photo_fields
     : [{ label: "Foto para o produto", required: true, instructions: "" }];
-  const textFields = product.text_fields ?? [];
+  const textFields = customizable ? (product.text_fields ?? []) : [];
   const addons = product.addons ?? [];
   const variations = product.variations ?? [];
 
-  const [photos, setPhotos] = useState({});
+  const uploads = usePrivateImageUploads();
+  const photos = uploads.files;
   const [texts, setTexts] = useState({});
   const [addonSelection, setAddonSelection] = useState([]);
   const [variationSelection, setVariationSelection] = useState(() => {
@@ -36,7 +37,7 @@ export default function ProductCustomizer({ product }) {
   });
   const [approval, setApproval] = useState(product.art_approval_mode === "obrigatoria" ? "sim" : "sim");
   const [qty, setQty] = useState(1);
-  const [busy, setBusy] = useState("");
+  const busy = uploads.active !== null;
 
   const unitPrice = useMemo(() => {
     let total = effectivePrice(product, settings);
@@ -53,36 +54,6 @@ export default function ProductCustomizer({ product }) {
     return Math.round(total * 100) / 100;
   }, [product, settings, variations, variationSelection, addons, addonSelection]);
 
-  async function handlePhoto(index, input) {
-    if (!input) return;
-    setBusy(`photo-${index}`);
-    try {
-      const { files } = await prepareUploads([input]);
-      const file = files[0];
-      if (!file) throw new Error("Não foi possível converter a foto do iPhone.");
-      const pdf = isPdfFile(file);
-      const preview = pdf ? "" : URL.createObjectURL(file);
-      const image = pdf ? null : await loadImage(preview);
-      const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
-      setPhotos((current) => ({
-        ...current,
-        [index]: {
-          name: file.name,
-          preview,
-          file_uri,
-          kind: pdf ? "pdf" : "image",
-          w: image?.naturalWidth || 0,
-          h: image?.naturalHeight || 0,
-        },
-      }));
-      toast.success(pdf ? "PDF enviado — será impresso como está" : "Foto adicionada");
-    } catch {
-      toast.error("Não foi possível ler este arquivo. Envie em JPG, PNG, AVIF, HEIC ou PDF.");
-    } finally {
-      setBusy("");
-    }
-  }
-
   function addToCart() {
     for (let index = 0; index < photoFields.length; index += 1) {
       if (photoFields[index].required && !photos[index]) {
@@ -98,7 +69,7 @@ export default function ProductCustomizer({ product }) {
     }
 
     const firstVariation = variations[0];
-    addItems([
+    if (!addItems([
       {
         key: uid(),
         area: "personalizado",
@@ -128,14 +99,14 @@ export default function ProductCustomizer({ product }) {
           preview_uri: photos[0]?.file_uri || "",
         },
       },
-    ]);
+    ])) return;
     toast.success("Produto adicionado ao carrinho");
     navigate({ to: "/carrinho" });
   }
 
   return (
     <div className="space-y-6">
-      <ProductPreview product={product} photos={photos} textFields={textFields} texts={texts} />
+      {customizable ? <ProductPreview product={product} photos={photos} textFields={textFields} texts={texts} /> : null}
 
       {variations.map((variation) => (
         <div key={variation.name}>
@@ -160,11 +131,12 @@ export default function ProductCustomizer({ product }) {
         </div>
       ))}
 
-      <div>
+      {customizable ? <div>
         <p className="eyebrow">Fotos para personalizar</p>
         <div className="mt-2 space-y-2">
           {photoFields.map((field, index) => (
-            <label key={`${field.label}-${index}`} className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-gold/60 p-3 text-sm hover:border-gold hover:bg-gold-soft/25">
+            <div key={`${field.label}-${index}`}>
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-gold/60 p-3 text-sm hover:border-gold hover:bg-gold-soft/25">
               <span className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-lg bg-secondary">
                 {photos[index] ? (
                   photos[index].kind === "pdf" ? (
@@ -172,7 +144,7 @@ export default function ProductCustomizer({ product }) {
                   ) : (
                     <img src={photos[index].preview} alt="" className="h-full w-full object-cover" />
                   )
-                ) : busy === `photo-${index}` ? (
+                ) : uploads.active === index ? (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 ) : (
                   <ImagePlus className="h-4 w-4 text-muted-foreground" />
@@ -183,19 +155,26 @@ export default function ProductCustomizer({ product }) {
                   {field.label} {field.required ? <span className="text-red-600">*</span> : null}
                 </span>
                 <span className="block truncate text-[11px] text-muted-foreground">
-                  {photos[index]?.name || field.instructions || "Escolher foto"}
+                  {uploads.active === index ? "Enviando…" : photos[index] ? `${photos[index].name} · enviado` : field.instructions || "Escolher foto"}
                 </span>
               </span>
               <input
                 type="file"
                 accept={ART_ACCEPT}
                 className="hidden"
-                onChange={(event) => handlePhoto(index, event.target.files?.[0])}
+                disabled={busy}
+                onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; void uploads.upload(index, file); }}
               />
             </label>
+            {uploads.failures[index] && <div className="mt-1 text-xs" role="alert">
+              <p className="text-destructive">{uploads.failures[index].name} · {uploads.failures[index].message}</p>
+              {photos[index] && <p className="text-muted-foreground">A foto anterior continua selecionada.</p>}
+              {uploads.failures[index].retryable && <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => uploads.retry(index)}>Tentar reenviar</Button>}
+            </div>}
+            </div>
           ))}
         </div>
-      </div>
+      </div> : null}
 
       {textFields.length > 0 && (
         <div>

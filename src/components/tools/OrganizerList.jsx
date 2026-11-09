@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Image } from "@/components/ui/image";
 
 // Lista de páginas com controles de ordem: usada pelo juntador de PDF e pelo montador de fotos.
-export default function OrganizerList({ items, onMove, onRemove, emptyLabel }) {
+export default function OrganizerList({ items, onMove, onRemove, emptyLabel, disabled = false }) {
   if (!items.length) {
     return (
       <p className="mt-3 rounded-lg bg-secondary/60 p-3 text-[11px] text-muted-foreground">
@@ -19,7 +19,7 @@ export default function OrganizerList({ items, onMove, onRemove, emptyLabel }) {
           <span className="w-5 shrink-0 text-center text-[11px] text-muted-foreground">{index + 1}</span>
           <div className="h-10 w-10 shrink-0 overflow-hidden rounded border border-border bg-secondary/60">
             {item.thumb ? (
-              <Image src={item.thumb} alt="" className="h-full w-full object-cover" />
+              <Image src={item.thumb} alt="" loading="lazy" className="h-full w-full object-cover" />
             ) : (
               <span className="flex h-full w-full items-center justify-center text-[9px] uppercase text-muted-foreground">PDF</span>
             )}
@@ -29,13 +29,13 @@ export default function OrganizerList({ items, onMove, onRemove, emptyLabel }) {
             {item.sub ? <p className="truncate text-[10px] text-muted-foreground">{item.sub}</p> : null}
           </div>
           <div className="flex shrink-0 items-center">
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onMove(index, -1)} disabled={index === 0} aria-label="Mover para cima">
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onMove(index, -1)} disabled={disabled || index === 0} aria-label="Mover para cima">
               <ArrowUp className="h-3.5 w-3.5" />
             </Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onMove(index, 1)} disabled={index === items.length - 1} aria-label="Mover para baixo">
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onMove(index, 1)} disabled={disabled || index === items.length - 1} aria-label="Mover para baixo">
               <ArrowDown className="h-3.5 w-3.5" />
             </Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => onRemove(index)} aria-label="Remover página">
+            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => onRemove(index)} disabled={disabled} aria-label="Remover página">
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>

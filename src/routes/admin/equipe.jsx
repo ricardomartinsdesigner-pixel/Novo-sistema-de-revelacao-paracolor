@@ -25,8 +25,8 @@ function TeamPage() {
         e aprovação de arte — mostrando quem foi o responsável.
       </p>
 
-      <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_360px]">
-        <section className="card-glass p-5">
+      <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="card-glass min-w-0 p-5">
           <h2 className="text-lg">Equipe cadastrada</h2>
           {isLoading ? (
             <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">

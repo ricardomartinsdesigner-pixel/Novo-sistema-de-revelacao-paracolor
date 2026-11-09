@@ -1,9 +1,18 @@
 import { useEffect, useRef, useState } from "react";
+import { photoColorFilter } from "@/lib/photo-color-effects";
 import { computeLayout } from "@/lib/photo";
 import { polaroidRatios } from "@/lib/polaroid";
 import { captionElement, captionFont } from "@/lib/caption-style";
 
-export default function PolaroidPreview({ photo, model, width = 260, editable = false, onCaptionChange }) {
+export default function PolaroidPreview({
+  photo,
+  model,
+  width = 260,
+  squareCorners = false,
+  editable = false,
+  onCaptionChange,
+  cropInteraction,
+}) {
   const boxRef = useRef(null);
   const [size, setSize] = useState({ w: width, h: width });
 
@@ -18,13 +27,13 @@ export default function PolaroidPreview({ photo, model, width = 260, editable = 
   }, []);
 
   const frameColor = model?.frame_color || "#ffffff";
-  // Foto quadrada: a área de impressão e a prévia usam as mesmas frações.
-  const ratios = polaroidRatios(model);
+  // A prévia usa a mesma área relativa da foto que o arquivo de impressão.
   const hasCaption = model?.has_caption !== false;
+  const ratios = polaroidRatios(model, hasCaption);
   const layout = computeLayout({
     imgW: photo.w || 1,
     imgH: photo.h || 1,
-    aspect: 1,
+    aspect: ratios.photoW / ratios.photoH,
     zoom: photo.zoom || 1,
     rotation: photo.rotation || 0,
     fit: photo.fit || "cover",
@@ -40,7 +49,7 @@ export default function PolaroidPreview({ photo, model, width = 260, editable = 
   return (
     <div
       ref={boxRef}
-      className="relative w-full overflow-hidden rounded-sm"
+      className={`relative w-full overflow-hidden ${squareCorners ? "rounded-none" : "rounded-sm"}`}
       style={{
         aspectRatio: `${model?.width_cm || 9} / ${model?.height_cm || 11}`,
         background: frameColor,
@@ -54,7 +63,15 @@ export default function PolaroidPreview({ photo, model, width = 260, editable = 
           right: `${ratios.left * 100}%`,
           top: `${ratios.top * 100}%`,
           height: `${ratios.photoH * 100}%`,
+          touchAction: cropInteraction ? "none" : undefined,
+          cursor: cropInteraction ? (cropInteraction.dragging ? "grabbing" : "grab") : undefined,
         }}
+        ref={cropInteraction?.frameRef}
+        onPointerDown={cropInteraction?.onPointerDown}
+        onPointerMove={cropInteraction?.onPointerMove}
+        onPointerUp={cropInteraction?.onPointerUp}
+        onPointerCancel={cropInteraction?.onPointerCancel}
+        onLostPointerCapture={cropInteraction?.onPointerUp}
       >
         {photo.preview ? (
           <img
@@ -66,11 +83,23 @@ export default function PolaroidPreview({ photo, model, width = 260, editable = 
               width: drawW,
               height: drawH,
               maxWidth: "none",
+              filter: photoColorFilter(photo.colorEffect),
               transform: `translate(-50%, -50%) translate(${(photo.ox || 0) * photoBoxW}px, ${
                 (photo.oy || 0) * photoBoxH
               }px) rotate(${photo.rotation || 0}deg) scale(${photo.flipH ? -1 : 1}, ${photo.flipV ? -1 : 1})`,
             }}
           />
+        ) : null}
+        {cropInteraction?.showOriginal && photo.preview ? (
+          <img src={photo.preview} alt="" className="pointer-events-none absolute inset-0 h-full w-full bg-white object-contain" draggable={false} />
+        ) : null}
+        {cropInteraction?.showGrid ? (
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute left-1/3 top-0 h-full w-px bg-white/75" />
+            <div className="absolute left-2/3 top-0 h-full w-px bg-white/75" />
+            <div className="absolute left-0 top-1/3 h-px w-full bg-white/75" />
+            <div className="absolute left-0 top-2/3 h-px w-full bg-white/75" />
+          </div>
         ) : null}
       </div>
 

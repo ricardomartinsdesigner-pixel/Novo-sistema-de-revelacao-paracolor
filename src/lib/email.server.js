@@ -1,4 +1,5 @@
 import { sendStoreEmail } from "@/lib/smtp-transport.server";
+import { awaitsPickupPayment, isPickupPaymentOrder } from "@/lib/order-payment";
 
 // Todos os avisos transacionais usam exclusivamente o SMTP salvo pelo administrador.
 const FLAG_BY_KIND = {
@@ -60,14 +61,20 @@ function textFor(kind, order, settings) {
   const pickup = fulfillmentLine(order, settings);
   switch (kind) {
     case "order_created":
+      if (isPickupPaymentOrder(order)) {
+        return `Recebemos seu pedido ${order.order_number}. O total de ${total} será pago no balcão quando você retirar. ${pickup}`;
+      }
       return `Seu pedido ${order.order_number} foi registrado com sucesso (total ${total}). Assim que o pagamento for confirmado, começamos a preparar tudo. ${pickup}`;
     case "payment_approved":
+      if (isPickupPaymentOrder(order)) return `Confirmamos o recebimento de ${total} referente ao pedido ${order.order_number}. Obrigado!`;
       return `O pagamento do pedido ${order.order_number} (${total}) foi aprovado. Já estamos cuidando da sua arte e da produção. ${pickup}`;
     case "art_ready":
       return `Preparamos a arte do pedido ${order.order_number}. Confira no site e aprove para liberarmos a produção.`;
     case "order_ready":
+      if (awaitsPickupPayment(order)) return `O pedido ${order.order_number} está pronto. Você paga ${total} no balcão ao retirar. ${pickup}`;
       return `O pedido ${order.order_number} está pronto! ${pickup}`;
     case "shipped":
+      if (order.fulfillment === "retirada" && ["retirado", "concluido"].includes(order.status)) return `A retirada do pedido ${order.order_number} foi registrada. Obrigado!`;
       return `O pedido ${order.order_number} saiu para entrega. ${pickup}`;
     default:
       return "";

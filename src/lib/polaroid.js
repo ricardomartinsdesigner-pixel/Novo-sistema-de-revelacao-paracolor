@@ -1,13 +1,12 @@
 import { captionElement, captionFont } from "@/lib/caption-style";
 
-// Geometria da polaroide: a área da foto é sempre quadrada e o que sobra da
-// altura vira área branca para a legenda. Prévia, recorte e arquivo de
-// impressão partem desta mesma medida.
+// Geometria única da polaroide para prévia, recorte e impressão. A área da foto
+// permanece quadrada; a faixa inferior serve apenas para a legenda.
 export const POLAROID_MARGIN_X = 0.055;
 export const POLAROID_MARGIN_TOP = 0.045;
 export const POLAROID_GAP = 0.03;
 
-export function polaroidGeometry(model) {
+export function polaroidGeometry(model, captionAreaEnabled = model?.has_caption !== false) {
   const width = Number(model?.width_cm) > 0 ? Number(model.width_cm) : 9;
   const height = Number(model?.height_cm) > 0 ? Number(model.height_cm) : 11;
   const marginX = width * POLAROID_MARGIN_X;
@@ -15,8 +14,9 @@ export function polaroidGeometry(model) {
   // Foto quadrada: o lado é a largura do papel menos as duas margens laterais.
   const side = Math.max(1, width - marginX * 2);
   const gap = height * POLAROID_GAP;
-  const caption = Math.max(0, height - marginTop - side - gap);
-  return { width, height, marginX, marginTop, side, gap, caption };
+  const caption = captionAreaEnabled ? Math.max(0, height - marginTop - side - gap) : 0;
+  const photoHeight = side;
+  return { width, height, marginX, marginTop, side, photoHeight, gap, caption, captionAreaEnabled };
 }
 
 // Limites da escrita no arquivo de impressão: o desenho corta a legenda em três
@@ -84,13 +84,13 @@ export function fitCaptionSize(photo, model) {
 }
 
 // Frações do papel, para as prévias em HTML.
-export function polaroidRatios(model) {
-  const geo = polaroidGeometry(model);
+export function polaroidRatios(model, captionAreaEnabled = model?.has_caption !== false) {
+  const geo = polaroidGeometry(model, captionAreaEnabled);
   return {
     left: geo.marginX / geo.width,
     top: geo.marginTop / geo.height,
     photoW: geo.side / geo.width,
-    photoH: geo.side / geo.height,
+    photoH: geo.photoHeight / geo.height,
     gap: geo.gap / geo.height,
     caption: geo.caption / geo.height,
   };

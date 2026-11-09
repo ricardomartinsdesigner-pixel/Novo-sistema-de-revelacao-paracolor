@@ -1,4 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
+import { enforceRateLimit } from "@/lib/vps/auth.server";
+import { nextOrderStep, publicOrderHistory } from "@/lib/customer-order";
 import { z } from "zod";
 
 const normalize = (value) => String(value || "").trim();
@@ -13,6 +16,7 @@ export const lookupOrder = createServerFn({ method: "POST" })
     })
   )
   .handler(async ({ data, context }) => {
+    await enforceRateLimit(getRequest(), "order-lookup");
     const role = context.getBase44().asServiceRole;
     const number = normalize(data.order_number).toUpperCase();
     const email = normalize(data.email).toLowerCase();
@@ -34,7 +38,9 @@ export const lookupOrder = createServerFn({ method: "POST" })
         created_date: order.created_date,
         production_days: order.production_days || 0,
         total: order.total || 0,
-        status_history: order.status_history ?? [],
+        status_history: publicOrderHistory(order.status_history),
+        production_deadline_label: order.production_deadline_label || "",
+        next_step: nextOrderStep(order),
         items: (items.items ?? []).map((item) => ({
           product_name: item.product_name,
           variant: item.variant,

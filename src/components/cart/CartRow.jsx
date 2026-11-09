@@ -9,13 +9,13 @@ export default function CartRow({ item, onRemove, onQty }) {
   const isPdf = /\.pdf$/i.test(item.photos?.[0]?.filename || item.options?.art_original_name || "");
   const previewUri = isPdf
     ? ""
-    : item.photos?.[0]?.print_file_uri ||
+    : item.options?.magnet_print_sheet_uri || item.photos?.[0]?.print_file_uri ||
       item.photos?.[0]?.original_file_uri ||
       item.options?.art_file_uri ||
       item.options?.preview_uri ||
       item.image;
   const image = useSignedUrl(previewUri);
-  const isPhotoItem = item.area === "revelacao" || item.area === "polaroid";
+  const isPhotoItem = item.area === "revelacao" || item.area === "polaroid" || (item.area === "magnet" && item.options?.magnet_kind !== "strip_kit");
 
   return (
     <div className="flex gap-4 border-b border-border/70 py-5 last:border-0">
@@ -37,8 +37,14 @@ export default function CartRow({ item, onRemove, onQty }) {
             <p className="mt-0.5 text-xs text-muted-foreground">{item.subtitle}</p>
             {item.photos?.length > 0 && (
               <p className="mt-1 text-xs text-muted-foreground">
-                {item.photos.length} foto(s) ·{" "}
-                {item.photos.reduce((sum, photo) => sum + (photo.copies || 1), 0)} impressão(ões)
+                {item.area === "magnet" && item.options?.magnet_kind === "strip_kit"
+                  ? `${(Number(item.qty) || 1) * 3} tirinha(s) magnética(s)`
+                  : <>{item.photos.length} foto(s) · {item.photos.reduce((sum, photo) => sum + (photo.copies || 1), 0)} impressão(ões)</>}
+              </p>
+            )}
+            {item.pricingTable === "profissional" && (
+              <p className="mt-1 text-xs font-medium text-primary">
+                Tabela profissional{item.tierLabel ? " · " + item.tierLabel : ""} · {formatBRL(item.tierUnitPrice)} por cópia
               </p>
             )}
             {item.options?.variation_name && (

@@ -39,6 +39,7 @@ export default function ServiceCard({ service, settings }) {
       </div>
       <div className="flex flex-1 flex-col p-5">
         {service.category ? <p className="eyebrow">{service.category}</p> : null}
+        <p className="mt-1 text-xs font-medium text-primary">Solicitação por orçamento</p>
         <h2 className="mt-1.5 text-xl leading-snug">{service.title}</h2>
         {service.short_description ? (
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{service.short_description}</p>

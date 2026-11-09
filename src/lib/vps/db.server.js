@@ -33,6 +33,27 @@ export async function ensureDatabase() {
         );
         CREATE INDEX IF NOT EXISTS vps_records_entity_created_idx ON vps_records(entity, created_at DESC);
         CREATE INDEX IF NOT EXISTS vps_records_owner_idx ON vps_records(entity, created_by_id);
+        CREATE INDEX IF NOT EXISTS vps_order_photo_order_idx ON vps_records ((data->>'order_id')) WHERE entity='OrderPhoto';
+        CREATE INDEX IF NOT EXISTS vps_order_coupon_idx ON vps_records ((data->>'coupon_id')) WHERE entity='Order';
+        CREATE INDEX IF NOT EXISTS vps_order_legacy_coupon_idx ON vps_records (UPPER(TRIM(data->>'coupon_code')))
+          WHERE entity='Order' AND NOT (data ? 'coupon_id');
+        CREATE INDEX IF NOT EXISTS vps_order_alert_at_idx ON vps_records ((data->>'order_alert_at'))
+          WHERE entity = 'Order' AND data ? 'order_alert_at';
+        CREATE TABLE IF NOT EXISTS vps_order_alerts (
+          order_id text PRIMARY KEY,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          is_legacy boolean NOT NULL DEFAULT false
+        );
+        ALTER TABLE vps_order_alerts ADD COLUMN IF NOT EXISTS is_legacy boolean NOT NULL DEFAULT false;
+        CREATE INDEX IF NOT EXISTS vps_order_alerts_created_idx ON vps_order_alerts(created_at DESC);
+        CREATE TABLE IF NOT EXISTS vps_order_views (
+          order_id text NOT NULL,
+          user_id text NOT NULL,
+          user_name text NOT NULL DEFAULT '',
+          viewed_at timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (order_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS vps_order_views_order_idx ON vps_order_views(order_id, viewed_at DESC);
         CREATE UNIQUE INDEX IF NOT EXISTS vps_user_email_unique_idx ON vps_records(lower(data->>'email')) WHERE entity='User';
         CREATE TABLE IF NOT EXISTS vps_otps (
           email text NOT NULL,
@@ -57,9 +78,41 @@ export async function ensureDatabase() {
           window_started_at timestamptz NOT NULL DEFAULT now(),
           hits integer NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS vps_site_visitor_daily (
+          visitor_id text NOT NULL,
+          visit_day date NOT NULL,
+          pageviews integer NOT NULL DEFAULT 0,
+          last_pageview_at timestamptz,
+          PRIMARY KEY(visitor_id, visit_day)
+        );
+        CREATE INDEX IF NOT EXISTS vps_site_visitor_day_idx ON vps_site_visitor_daily(visit_day DESC);
+        CREATE TABLE IF NOT EXISTS vps_site_presence (
+          visitor_id text PRIMARY KEY,
+          last_seen_at timestamptz NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS vps_site_presence_seen_idx ON vps_site_presence(last_seen_at DESC);
       `);
+      await db.query(
+        `INSERT INTO vps_order_alerts(order_id, created_at, is_legacy)
+         SELECT id, COALESCE(NULLIF(data->>'order_alert_at', '')::timestamptz, created_at), true
+         FROM vps_records WHERE entity='Order' AND data ? 'order_alert_at'
+           AND data->>'status'=ANY(ARRAY['pagamento_aprovado','aguardando_arte','aguardando_aprovacao',
+             'ajustes_solicitados','arte_aprovada','aguardando_producao']::text[])
+         ON CONFLICT(order_id) DO NOTHING`,
+      );
       await db.query("DELETE FROM vps_rate_limits WHERE window_started_at < now()-interval '2 days'");
       await seedAdmin(db);
+      // Corrige vínculos marcados como bloqueados antes da revogação atômica.
+      await db.query(`
+        UPDATE vps_records u SET data=jsonb_set(u.data, '{role}', '"user"'), updated_at=now()
+        WHERE u.entity='User' AND u.data->>'role'='admin' AND EXISTS (
+          SELECT 1 FROM vps_records e WHERE e.entity='Employee' AND e.data->'active'='false'::jsonb AND (
+            e.data->>'user_id'=u.id OR (
+              nullif(e.data->>'user_id','') IS NULL AND lower(e.data->>'email')=lower(u.data->>'email')
+            )
+          )
+        )
+      `);
     })().catch((error) => {
       initialized = undefined;
       throw error;
@@ -116,3 +169,19 @@ export function newPasswordHash(password) {
 }
 
 export { randomBytes, randomUUID };
+
+export async function withTransaction(run) {
+  await ensureDatabase();
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await run(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}

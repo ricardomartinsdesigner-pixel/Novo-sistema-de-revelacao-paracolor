@@ -1,7 +1,7 @@
 {
   "name": "paracolor-vps",
   "private": true,
-  "version": "1.0.6",
+  "version": "1.12.23",
   "type": "module",
   "engines": {
     "node": ">=22.13.0"
@@ -16,6 +16,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dnd-kit/core": "6.3.1",
+    "@dnd-kit/sortable": "10.0.0",
+    "@dnd-kit/utilities": "3.2.2",
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^5.9.1",
     "@radix-ui/react-accordion": "^1.2.3",
@@ -49,13 +52,16 @@
     "@tanstack/react-router": "^1.170.0",
     "@tanstack/react-router-ssr-query": "1.167.3",
     "@tanstack/react-start": "^1.168.60",
-    "pg": "^8.16.3",
+    "ag-psd": "^34.1.0",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.5.2",
+    "exceljs": "4.4.0",
+    "exifr": "^7.1.3",
+    "fflate": "0.8.3",
     "framer-motion": "^11.16.4",
     "heic2any": "^0.0.4",
     "html2canvas": "^1.4.1",
@@ -66,6 +72,8 @@
     "moment": "^2.31.0",
     "next-themes": "^0.4.4",
     "pdf-lib": "^1.17.1",
+    "pg": "^8.16.3",
+    "qrcode": "1.5.4",
     "react": "^19.1.0",
     "react-day-picker": "^8.10.1",
     "react-dom": "^19.1.0",
@@ -80,6 +88,7 @@
     "tailwind-merge": "^3.0.2",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
+    "yazl": "3.3.1",
     "zod": "~4.4.3"
   },
   "devDependencies": {
@@ -89,9 +98,9 @@
     "eslint": "^9.19.0",
     "eslint-plugin-react-hooks": "^5.0.0",
     "globals": "^15.14.0",
+    "nitro": "^3.0.261103-rc",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
-    "vite": "^8.2.0",
-    "nitro": "^3.0.261103-rc"
+    "vite": "^8.2.0"
   }
 }

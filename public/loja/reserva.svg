@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400">
+  <rect width="640" height="400" fill="#22201f"/>
+  <rect x="22" y="22" width="596" height="356" rx="12" fill="none" stroke="#8e744e" stroke-width="2"/>
+  <g transform="translate(286 128)" fill="none" stroke="#d6b47c" stroke-width="3">
+    <rect x="1" y="12" width="66" height="46" rx="6"/>
+    <path d="M18 12l6-9h20l6 9"/>
+    <circle cx="34" cy="34" r="12"/>
+  </g>
+  <text x="320" y="243" text-anchor="middle" fill="#efdfc4" font-family="Georgia,serif" font-size="42" letter-spacing="3">Paracolor</text>
+</svg>

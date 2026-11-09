@@ -188,6 +188,7 @@ export function RegisterPage({ managedAccount } = {}) {
           Entrar
         </AuthLink>
       </p>}
+      <p className="mt-3 text-center text-xs"><AuthLink to="/contato">Preciso de ajuda para acessar minha conta</AuthLink></p>
     </AuthLayout>
   );
 }

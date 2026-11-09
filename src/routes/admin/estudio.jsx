@@ -35,7 +35,7 @@ function StudioAdminPage() {
           guardada aqui e não aparece no site.
         </p>
         <p className="mt-2">
-          Textos, capa e destaques: <Link to="/admin/conteudo" className="text-primary underline-offset-4 hover:underline">Conteúdo do site</Link>.
+          Textos, capa e destaques: <Link to="/admin/conteudo" hash="conteudo-estudio" className="text-primary underline-offset-4 hover:underline">Editar capa e textos do Estúdio</Link>.
           Endereço, telefone, horário e Instagram do rodapé:{" "}
           <Link to="/admin/configuracoes" className="text-primary underline-offset-4 hover:underline">Configurações</Link>.
         </p>

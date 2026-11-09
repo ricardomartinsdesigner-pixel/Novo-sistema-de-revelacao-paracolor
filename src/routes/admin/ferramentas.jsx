@@ -1,10 +1,9 @@
-import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Download, QrCode, ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import HeicBatchTool from "@/components/tools/HeicBatchTool";
-import ImagesToPdfTool from "@/components/tools/ImagesToPdfTool";
-import PdfMergeTool from "@/components/tools/PdfMergeTool";
+import { ShieldCheck } from "lucide-react";
+import ToolsGrid from "@/components/tools/ToolsGrid";
+import PhotoOrderCalculator from "@/components/pricing/PhotoOrderCalculator";
+import PolaroidBatchMounter from "@/components/tools/PolaroidBatchMounter";
+import PickupQrSettings from "@/components/admin/PickupQrSettings";
 
 export const Route = createFileRoute("/admin/ferramentas")({
   head: () => ({ meta: [{ title: "Ferramentas — Paracolor" }] }),
@@ -12,43 +11,36 @@ export const Route = createFileRoute("/admin/ferramentas")({
 });
 
 function ToolsPage() {
-  const [qrText, setQrText] = useState("");
-
-  const qrUrl = qrText.trim()
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(qrText.trim())}`
-    : "";
-
   return (
     <div>
       <p className="eyebrow">Sistema</p>
-      <h1 className="mt-1 text-3xl">Ferramentas gratuitas</h1>
-      <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-        <ShieldCheck className="h-3.5 w-3.5" /> Tudo roda no seu navegador — nenhum arquivo é enviado para a nuvem.
+      <h1 className="mt-1 text-3xl">Ferramentas</h1>
+      <p className="mb-6 mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <ShieldCheck className="h-3.5 w-3.5" /> Calcule o orçamento combinado de Revelação e Polaroides e acesse as demais ferramentas da loja.
       </p>
-
-      <div className="mt-6 grid gap-5 lg:grid-cols-2">
-        <section className="card-glass p-5">
-          <p className="flex items-center gap-2 text-sm font-medium"><QrCode className="h-4 w-4" /> QR Code</p>
-          <input
-            value={qrText}
-            onChange={(event) => setQrText(event.target.value)}
-            placeholder="Link, WhatsApp ou texto"
-            className="mt-3 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-          />
-          <div className="mt-3 flex min-h-[160px] items-center justify-center rounded-lg bg-secondary/60 p-3">
-            {qrUrl ? <img src={qrUrl} alt="QR Code gerado" className="h-40 w-40" /> : <span className="text-[11px] text-muted-foreground">Digite algo para gerar</span>}
-          </div>
-          {qrUrl ? (
-            <Button asChild variant="outline" size="sm" className="mt-3 w-full gap-1.5">
-              <a href={qrUrl} target="_blank" rel="noreferrer"><Download className="h-3.5 w-3.5" /> Abrir para baixar</a>
-            </Button>
-          ) : null}
-        </section>
-
-        <HeicBatchTool />
-        <ImagesToPdfTool />
-        <PdfMergeTool />
-      </div>
+      <section className="card-glass mb-6 p-5">
+        <div className="mb-4">
+          <p className="eyebrow">Atendimento</p>
+          <h2 className="mt-1 text-2xl">Calculadora de pedido</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Use os formatos mistos para preparar o valor e copiar o orçamento para o cliente.</p>
+        </div>
+        <PhotoOrderCalculator mode="admin" />
+      </section>
+      <section className="mb-6 space-y-3">
+        <div>
+          <p className="eyebrow">Produção</p>
+          <p className="mt-1 text-sm text-muted-foreground">Uso interno da equipe. Para liberar a ferramenta aos clientes, ative a opção correspondente em Módulos.</p>
+        </div>
+        <PolaroidBatchMounter />
+      </section>
+      <section className="mb-6 space-y-3">
+        <div>
+          <p className="eyebrow">Retiradas</p>
+          <p className="mt-1 text-sm text-muted-foreground">Configure como a leitura do QR Code altera o pedido.</p>
+        </div>
+        <PickupQrSettings />
+      </section>
+      <ToolsGrid />
     </div>
   );
 }

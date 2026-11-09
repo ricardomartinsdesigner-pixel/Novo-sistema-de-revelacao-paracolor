@@ -149,3 +149,16 @@ export function deadlineFor(settings, daysOrArea, from = new Date()) {
   }
   return estimateReadyDate({ days: Number(daysOrArea) || settings?.production_days || 3, cutoff_hour: settings?.cutoff_hour ?? 17, holidays: settings?.holidays ?? [], from });
 }
+
+export function revelationOffer(settings, from = new Date()) {
+  const { value, unit } = deadlineConfigForArea(settings, "revelacao");
+  if (unit !== "days") {
+    const ready = deadlineFor(settings, "revelacao", from);
+    const durationMs = value * (unit === "hours" ? 3_600_000 : 60_000);
+    if (ready.getTime() - from.getTime() > durationMs) {
+      return `Previsão para retirada: ${formatReadyDate(ready)}`;
+    }
+  }
+  const duration = unit === "days" ? `${value} ${value === 1 ? "dia útil" : "dias úteis"}` : formatDeadlineDuration(settings, "revelacao");
+  return `Revele suas fotos em até ${duration}`;
+}

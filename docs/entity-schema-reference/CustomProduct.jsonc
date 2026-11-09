@@ -141,6 +141,9 @@
     },
     "sort": {
       "type": "number"
+    },
+    "subcategory": {
+      "type": "string"
     }
   },
   "required": [

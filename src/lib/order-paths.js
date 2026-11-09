@@ -1,19 +1,27 @@
 /**
  * Organização dos arquivos de produção de um pedido.
- * Estrutura: PEDIDO/<Categoria>/<Tamanho>/<N>_COPIA(S)/arquivo.jpg
+ * Revelação e Polaroides: PEDIDO/<Categoria>/<Tamanho ou modelo> [N cópias]/arquivo.jpg
  */
 
 const AREA_FOLDERS = {
   revelacao: "Fotos_Impressao",
   polaroid: "Polaroids",
-  banner: "Banners",
+  magnet: "Fotos_Imas",
+  banner: "Banner",
   personalizado: "Personalizados",
   moldura: "Molduras",
 };
 
+const POLAROID_MODELS = new Map([
+  ["5x7", "Baby"],
+  ["7x9", "Mini"],
+  ["9x11", "Normal"],
+]);
+
 export const AREA_LABELS = {
   revelacao: "Revelação",
   polaroid: "Polaroides",
+  magnet: "Fotos Ímã",
   banner: "Banners",
   personalizado: "Personalizados",
   moldura: "Molduras",
@@ -60,11 +68,33 @@ export function copiesFolder(photo) {
 }
 
 export function photoFolder(photo) {
-  return `${areaFolder(photo.area)}/${clean(sizeLabel(photo), "Sem_tamanho")}/${copiesFolder(photo)}`;
+  const area = areaFolder(photo.area);
+  const size = sizeLabel(photo);
+  const safeSize = clean(size, "Sem_tamanho");
+  if (photo.area !== "revelacao" && photo.area !== "polaroid") {
+    return `${area}/${safeSize}/${copiesFolder(photo)}`;
+  }
+
+  const dimensions = size.match(/(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)/i)
+    ?.slice(1).map((value) => Number(value.replace(",", ".")));
+  const width = Number(photo.width_cm);
+  const height = Number(photo.height_cm);
+  const measured = width > 0 && height > 0 ? [width, height] : null;
+  let folder = (dimensions ?? measured)?.join("x") ?? safeSize;
+  if (photo.area === "polaroid") {
+    const measuredSize = measured?.sort((a, b) => a - b).join("x");
+    const namedSize = dimensions?.sort((a, b) => a - b).join("x");
+    const model = POLAROID_MODELS.get(measuredSize) ?? POLAROID_MODELS.get(namedSize);
+    folder = model ? `Polaroide ${model}` : safeSize;
+  }
+
+  const copies = copiesOf(photo);
+  return `${area}/${folder}${copies > 1 ? ` ${copies} cópias` : ""}`;
 }
 
 export function photoPrefix(photo) {
   if (photo.area === "polaroid") return "POLAROID";
+  if (photo.area === "magnet") return "IMA";
   if (photo.area === "banner") return "BANNER";
   return "FOTO";
 }

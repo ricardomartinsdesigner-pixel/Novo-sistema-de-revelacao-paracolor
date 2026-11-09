@@ -6,13 +6,12 @@ import StudioHero from "@/components/studio/StudioHero";
 import StudioHighlights from "@/components/studio/StudioHighlights";
 import PromoCarousel from "@/components/site/PromoCarousel";
 import ParkingHighlight from "@/components/site/ParkingHighlight";
-import { Image } from "@/components/ui/image";
 import { moduleEnabled, useEntityList, useSettings } from "@/lib/store";
 import { useSiteContent } from "@/hooks/use-site-content";
 import { instagramHandle, instagramUrl, serviceMessage, telHref, whatsappUrl } from "@/lib/contact";
 
 const BACKSTAGE_IMAGE =
-  "https://media.base44.com/images/public/6aebd7693f7d30fc2024dc02/70fd07908_generated_6d4896fb.jpg";
+  "/loja/estudio-bastidores.webp";
 
 export const Route = createFileRoute("/_site/estudio-fotografico")({
   head: () => ({
@@ -109,12 +108,12 @@ function StudioPage() {
           </p>
         )}
 
-        <div className="relative mt-9 h-[200px] border border-gold-warm/45">
-          <Image
+        <div className="relative mt-9 w-full overflow-hidden border border-gold-warm/45 bg-night-panel">
+          <img
             src={content["page.estudio.backstage"] || BACKSTAGE_IMAGE}
             alt="Bastidores do estúdio"
-            className="h-full w-full grayscale brightness-75"
-            fittingType="fill"
+            loading="lazy"
+            className="block h-auto w-full grayscale brightness-75"
           />
         </div>
       </section>

@@ -5,6 +5,10 @@
     "store_name": {
       "type": "string"
     },
+    "google_review_url": {
+      "type": "string",
+      "default": ""
+    },
     "logo_url": {
       "type": "string"
     },
@@ -69,6 +73,10 @@
     "maintenance_enabled": {
       "type": "boolean",
       "default": false
+    },
+    "allow_store_payment": {
+      "type": "boolean",
+      "default": true
     },
     "maintenance_title": {
       "type": "string"
@@ -164,6 +172,10 @@
       "type": "boolean",
       "default": true
     },
+    "module_fotos_ima": {
+      "type": "boolean",
+      "default": true
+    },
     "module_banners": {
       "type": "boolean",
       "default": true
@@ -173,6 +185,10 @@
       "default": true
     },
     "module_molduras": {
+      "type": "boolean",
+      "default": true
+    },
+    "module_albuns_books": {
       "type": "boolean",
       "default": true
     },
@@ -211,7 +227,36 @@
     "module_estacionamento": {
       "type": "boolean",
       "default": true
-    }
+    },
+    "module_photo_duplicate_organizer": {
+      "type": "boolean",
+      "default": true
+    },
+    "module_polaroid_batch_mounter": {
+      "type": "boolean",
+      "default": false
+    },
+    "pickup_qr_behavior": {
+      "type": "string",
+      "enum": ["automatico", "confirmar", "consultar"],
+      "default": "automatico"
+    },
+    "page_home": { "type": "boolean", "default": true },
+    "page_revelar": { "type": "boolean", "default": true },
+    "page_polaroids_criar": { "type": "boolean", "default": true },
+    "page_banner_pedido": { "type": "boolean", "default": true },
+    "page_personalizado_produto": { "type": "boolean", "default": true },
+    "page_album_book_produto": { "type": "boolean", "default": true },
+    "page_carrinho": { "type": "boolean", "default": true },
+    "page_checkout": { "type": "boolean", "default": true },
+    "page_minha_conta": { "type": "boolean", "default": true },
+    "page_pedido": { "type": "boolean", "default": true },
+    "page_consultar_pedido": { "type": "boolean", "default": true },
+    "page_simulador": { "type": "boolean", "default": true },
+    "page_contato": { "type": "boolean", "default": true },
+    "page_privacidade": { "type": "boolean", "default": true },
+    "page_termos": { "type": "boolean", "default": true },
+    "page_trocas": { "type": "boolean", "default": true }
   },
   "rls": {
     "read": {},

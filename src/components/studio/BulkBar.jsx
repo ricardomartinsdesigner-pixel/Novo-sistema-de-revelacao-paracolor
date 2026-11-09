@@ -1,4 +1,4 @@
-import { Copy, Trash2 } from "lucide-react";
+import { Check, Copy, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 
@@ -9,6 +9,7 @@ export default function BulkBar({
   totalCount,
   sizeId,
   onSizeChange,
+  onSizeAll,
   fit,
   onFitChange,
   border,
@@ -71,6 +72,15 @@ export default function BulkBar({
           ))}
         </select>
       </label>
+
+      <div className="-mt-2 space-y-1.5">
+        <Button type="button" size="sm" variant="secondary" onClick={onSizeAll} disabled={!totalCount} className="w-full gap-1.5">
+          <Check className="h-3.5 w-3.5" /> Aplicar formato a todas ({totalCount})
+        </Button>
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          Usa o formato escolhido acima em todas as fotos, mesmo que apenas algumas estejam selecionadas.
+        </p>
+      </div>
 
       <label className="block">
         <span className="eyebrow">Enquadramento</span>

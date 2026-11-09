@@ -70,7 +70,7 @@ export function useRegistration(returnTo, managedAccount) {
       setConfirm("");
       if (result?.verification_required === false && !managedAccount) {
         await saveProfile();
-        toast("Cadastro concluído", { description: "Você já pode acessar sua conta. A confirmação por e-mail ficará disponível quando o envio for ativado." });
+        toast("Cadastro concluído", { description: "Você já pode acessar sua conta. O cadastro foi feito sem código porque o envio de e-mails está indisponível." });
         window.location.href = returnTo;
         return;
       }

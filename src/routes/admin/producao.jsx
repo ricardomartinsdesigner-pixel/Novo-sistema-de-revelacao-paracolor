@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Search, X } from "lucide-react";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { OrderQueueSearch, OrderQueueFooter, useOrderQueue } from "@/components/admin/OrderQueueControls";
 import ProductionCard from "@/components/admin/ProductionCard";
 import OrderReleasePanel from "@/components/admin/OrderReleasePanel";
-import { settleQuickDeadlines, updateOrderStatus } from "@/lib/store-fns";
+import { updateOrderStatus } from "@/lib/store-fns";
+import { needsArtApproval, PRODUCTION_START_STATUSES } from "@/lib/order-production";
+import { awaitsPickupPayment } from "@/lib/order-payment";
 
 export const Route = createFileRoute("/admin/producao")({
   head: () => ({ meta: [{ title: "Produção — Paracolor" }] }),
@@ -15,82 +16,36 @@ export const Route = createFileRoute("/admin/producao")({
 });
 
 const STAGES = [
-  { key: "fila", title: "Fila", statuses: ["pagamento_aprovado", "arte_aprovada", "aguardando_producao"], next: "em_producao", action: "Iniciar produção" },
+  { key: "fila", title: "Prontos para iniciar", statuses: PRODUCTION_START_STATUSES, next: "em_producao", action: "Iniciar produção" },
+  { key: "arte", title: "Aguardando aprovação da arte", statuses: PRODUCTION_START_STATUSES, next: "", action: "Aguardando aprovação da arte" },
   { key: "producao", title: "Em produção", statuses: ["em_producao"], next: "aguardando_conferencia", action: "Ir para conferência" },
   { key: "conferencia", title: "Conferência", statuses: ["aguardando_conferencia"], next: "pronto", action: "Marcar pronto" },
-  { key: "pronto", title: "Pronto", statuses: ["pronto"], next: "enviado", action: "Marcar entregue/retirado" },
+  { key: "pronto", title: "Pronto", statuses: ["pronto"], next: "", action: "Acompanhar em Entregas" },
 ];
-
-const ALL_STATUSES = STAGES.flatMap((stage) => stage.statuses);
 
 function ProductionPage() {
   const queryClient = useQueryClient();
   const [busyId, setBusyId] = useState("");
-  const [search, setSearch] = useState("");
   const advance = useServerFn(updateOrderStatus);
-  const settle = useServerFn(settleQuickDeadlines);
 
-  // Prazo encerrado = pedido pronto: confere ao abrir a fila e a cada minuto.
-  useEffect(() => {
-    let active = true;
-    const run = () =>
-      settle()
-        .then((result) => {
-          if (active && result?.settled) queryClient.invalidateQueries({ queryKey: ["admin-producao"] });
-        })
-        .catch(() => {});
-    run();
-    const timer = setInterval(run, 60000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [settle, queryClient]);
-
-  const { data: orders = [], isPending, error } = useQuery({
-    queryKey: ["admin-producao"],
-    queryFn: async () => {
-      const page = await base44.entities.Order.filter(
-        { status: { $in: ALL_STATUSES }, payment_status: "aprovado" },
-        { sort: "created_date", limit: 120 }
-      );
-      const items = page.items ?? [];
-      if (!items.length) return [];
-      const aggregates = await base44.entities.OrderPhoto.aggregate({
-        query: { order_id: { $in: items.map((order) => order.id) } },
-        groupBy: "order_id",
-        sum: ["copies"],
-      }).catch(() => ({ rows: [] }));
-      const prints = new Map((aggregates.rows ?? []).map((row) => [row.order_id, row.sum_copies || row.count || 0]));
-      return items.map((order) => ({ ...order, prints: prints.get(order.id) || 0 }));
-    },
-  });
-
+  const queue = useOrderQueue("production", "admin-producao");
+  const { orders, isPending, error, search } = queue;
   const mutation = useMutation({
     mutationFn: (order) => advance({ data: { order_id: order.id, status: order.nextStatus } }),
     onMutate: (order) => setBusyId(order.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-producao"] }),
+    onSuccess: () => Promise.all(["admin-producao", "admin-entregas", "admin-new-orders", "admin-orders", "Order"].map((key) => queryClient.invalidateQueries({ queryKey: [key] }))),
     onError: (mutationError) => toast.error(mutationError.message || "Não foi possível mudar o status."),
     onSettled: () => setBusyId(""),
   });
-
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return orders;
-    return orders.filter((order) =>
-      [order.internal_number, order.order_number].some((value) =>
-        String(value || "").toLowerCase().includes(term)
-      )
-    );
-  }, [orders, search]);
 
   const columns = useMemo(
     () =>
       STAGES.map((stage) => ({
         ...stage,
-        orders: filtered.filter((order) => stage.statuses.includes(order.status)),
+        orders: orders.filter((order) => stage.statuses.includes(order.status)
+          && (stage.key === "arte" ? needsArtApproval(order) : stage.key !== "fila" || !needsArtApproval(order))),
       })),
-    [filtered]
+    [orders]
   );
 
   return (
@@ -100,31 +55,11 @@ function ProductionPage() {
           <p className="eyebrow">Operação</p>
           <h1 className="mt-1 text-3xl">Produção</h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            Pedidos pagos na fila de impressão, do mais antigo para o mais novo.
+            Acompanhe as aprovações e a fila de impressão, do pedido mais antigo para o mais novo.
           </p>
         </div>
 
-        <label className="relative block w-full sm:w-72">
-          <span className="sr-only">Buscar por número do pedido</span>
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar nº do pedido"
-            className="h-10 w-full rounded-full border border-border bg-card pl-9 pr-9 text-sm outline-none transition focus:border-gold focus:ring-2 focus:ring-gold/25"
-          />
-          {search ? (
-            <button
-              type="button"
-              onClick={() => setSearch("")}
-              aria-label="Limpar busca"
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
-        </label>
+        <OrderQueueSearch queue={queue} />
       </div>
 
       <OrderReleasePanel
@@ -133,9 +68,9 @@ function ProductionPage() {
 
       {error ? (
         <p className="mt-8 text-sm text-muted-foreground">Não foi possível carregar a fila de produção.</p>
-      ) : search.trim() && !isPending && !filtered.length ? (
+      ) : search.trim() && !isPending && !orders.length ? (
         <p className="mt-8 rounded-2xl border border-border bg-secondary/40 p-6 text-center text-sm text-muted-foreground">
-          Nenhum pedido em produção com o número “{search.trim()}”.
+          Nenhum pedido em produção para “{search.trim()}”.
         </p>
       ) : (
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -149,15 +84,21 @@ function ProductionPage() {
               </header>
 
               <div className="mt-3 space-y-2">
-                {column.orders.map((order) => (
-                  <ProductionCard
-                    key={order.id}
-                    order={order}
-                    actionLabel={column.action}
-                    busy={busyId === order.id}
-                    onAdvance={(target) => mutation.mutate({ ...target, nextStatus: column.next })}
-                  />
-                ))}
+                {column.orders.map((order) => {
+                  const readyForPickup = column.key === "pronto" && order.fulfillment === "retirada";
+                  const pending = readyForPickup && awaitsPickupPayment(order);
+                  const waitingArt = needsArtApproval(order);
+                  return (
+                    <ProductionCard
+                      key={order.id}
+                      order={order}
+                      actionLabel={waitingArt ? "Aguardando aprovação da arte" : pending ? "Aguardando recebimento no balcão" : readyForPickup ? "Acompanhar em Entregas" : column.action}
+                      busy={busyId === order.id}
+                      disabled={waitingArt || pending || !column.next}
+                      onAdvance={(target) => mutation.mutate({ ...target, nextStatus: column.next })}
+                    />
+                  );
+                })}
                 {!column.orders.length && (
                   <p className="px-1 py-6 text-center text-[11px] text-muted-foreground">
                     {isPending ? "Carregando…" : "Nada por aqui."}
@@ -168,6 +109,7 @@ function ProductionPage() {
           ))}
         </div>
       )}
+      <OrderQueueFooter queue={queue} />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import SystemDiagnostics from "@/components/admin/SystemDiagnostics";
 import { useSettings } from "@/lib/store";
 import { countPhotosByPeriod, purgePhotosByPeriod } from "@/lib/store-fns";
 
@@ -37,7 +38,7 @@ function MaintenancePage() {
   });
   const [found, setFound] = useState(null);
   const [checking, setChecking] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
+  const [confirmed, setConfirmed] = useState("");
   const [purging, setPurging] = useState(false);
   const countPhotos = useServerFn(countPhotosByPeriod);
   const purgePhotos = useServerFn(purgePhotosByPeriod);
@@ -69,10 +70,10 @@ function MaintenancePage() {
   async function checkPeriod() {
     setChecking(true);
     setFound(null);
-    setConfirmed(false);
+    setConfirmed("");
     try {
       const result = await countPhotos({ data: period });
-      setFound(result.count);
+      setFound(result);
     } catch (error) {
       toast.error(error?.message || "Não foi possível consultar as fotos.");
     } finally {
@@ -83,10 +84,10 @@ function MaintenancePage() {
   async function purge() {
     setPurging(true);
     try {
-      const result = await purgePhotos({ data: period });
+      const result = await purgePhotos({ data: { ...period, confirmation: confirmed, expectedCount: found.count } });
       toast.success(`${result.deleted} foto(s) apagada(s)`);
-      setFound(0);
-      setConfirmed(false);
+      setFound({ count: 0, orders: 0 });
+      setConfirmed("");
     } catch (error) {
       toast.error(error?.message || "Não foi possível apagar as fotos.");
     } finally {
@@ -111,6 +112,8 @@ function MaintenancePage() {
           Tire a loja do ar enquanto ajusta o site e apague as fotos enviadas em um período.
         </p>
       </div>
+
+      <SystemDiagnostics />
 
       <section className="card-glass p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -209,22 +212,22 @@ function MaintenancePage() {
         {found !== null && (
           <div className="mt-5 rounded-xl bg-secondary/70 p-4">
             <p className="text-sm">
-              <strong className="font-display text-lg">{found}</strong> foto(s) enviada(s) entre {formatDay(period.from)} e{" "}
+              <strong className="font-display text-lg">{found.count}</strong> foto(s) de {found.orders} pedido(s) encerrado(s) no período de {formatDay(period.from)} e{" "}
               {formatDay(period.to)}.
             </p>
-            {found > 0 ? (
+            {found.count > 0 ? (
               <>
                 <p className="mt-2 flex items-start gap-2 text-xs text-red-700">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  As fotos saem dos pedidos desse período, inclusive de pedidos que ainda estejam em produção. Não dá para
-                  desfazer.
+                  A exclusão atinge fotos enviadas no período em pedidos encerrados. Confira o backup antes de continuar.
                 </p>
                 <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                  <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+                  <input aria-label="Digite APAGAR para confirmar" value={confirmed} onChange={(event) => setConfirmed(event.target.value.toUpperCase())}
+                    placeholder="Digite APAGAR" className="rounded border border-input bg-background px-2 py-1" />
                   Entendi e quero apagar essas fotos
                 </label>
-                <Button variant="destructive" className="mt-3 gap-2" onClick={purge} disabled={!confirmed || purging}>
-                  {purging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Apagar {found} foto(s)
+                <Button variant="destructive" className="mt-3 gap-2" onClick={purge} disabled={confirmed !== "APAGAR" || purging}>
+                  {purging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Apagar {found.count} foto(s)
                 </Button>
               </>
             ) : (

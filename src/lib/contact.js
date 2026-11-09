@@ -36,5 +36,6 @@ export function instagramHandle(handle) {
 /** Message sent to WhatsApp when a visitor asks about a specific service. */
 export function serviceMessage(template, serviceTitle) {
   const base = String(template || "").trim() || "Olá! Vim pelo site da Paracolor.";
-  return serviceTitle ? `${base}\n\nServiço: ${serviceTitle}` : base;
+  if (base.includes("{pedido}")) return base.replaceAll("{pedido}", serviceTitle || "atendimento");
+  return serviceTitle ? `${base}\n\nAssunto: ${serviceTitle}` : base;
 }

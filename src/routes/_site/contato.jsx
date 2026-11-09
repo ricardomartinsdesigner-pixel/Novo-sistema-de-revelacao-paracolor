@@ -3,10 +3,10 @@ import { MessageCircle, Mail, MapPin, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEntityList, useSettings } from "@/lib/store";
 import { useSiteContent } from "@/hooks/use-site-content";
-import { serviceMessage, whatsappUrl } from "@/lib/contact";
+import { serviceMessage, telHref, whatsappUrl } from "@/lib/contact";
 
 export const Route = createFileRoute("/_site/contato")({
-  validateSearch: (search) => ({ servico: typeof search?.servico === "string" ? search.servico : undefined }),
+  validateSearch: (search) => ({ servico: typeof search?.servico === "string" ? search.servico.slice(0, 120) : undefined, moldura: typeof search?.moldura === "string" ? search.moldura.slice(0, 120) : undefined }),
   head: () => ({
     meta: [
       { title: "Falar com a Paracolor" },
@@ -19,13 +19,18 @@ export const Route = createFileRoute("/_site/contato")({
 function ContactPage() {
   const { settings } = useSettings();
   const { content } = useSiteContent();
-  const { servico } = Route.useSearch();
+  const { servico, moldura } = Route.useSearch();
   const { data: services = [] } = useEntityList("Service", { active: true }, { sort: "sort" });
   const service = services.find((item) => item.id === servico);
-  const message = serviceMessage(settings?.wa_template_contato, service?.title);
+  const { data: frames = [] } = useEntityList("Frame", { active: true, id: moldura || "" }, { limit: 1 });
+  const frame = moldura ? frames[0] : null;
+  const subject = service?.title || frame?.name || "";
+  const options = frame ? [frame.code, frame.material, frame.color, frame.sizes].filter(Boolean).join(" · ") : "";
+  const message = serviceMessage(settings?.wa_template_contato, subject) + (options ? `\nOpções: ${options}` : "");
+  const phone = telHref(settings?.phone);
   const waLink = whatsappUrl(settings?.whatsapp, message);
   const mailLink = settings?.email
-    ? `mailto:${settings.email}?subject=${encodeURIComponent(`Orçamento${service ? ` — ${service.title}` : ""}`)}&body=${encodeURIComponent(message)}`
+    ? `mailto:${settings.email}?subject=${encodeURIComponent(`Orçamento${subject ? ` — ${subject}` : ""}`)}&body=${encodeURIComponent(message)}`
     : "";
 
   return (
@@ -34,15 +39,16 @@ function ContactPage() {
       <h1 className="mt-2 text-4xl">{content["page.contato.title"]}</h1>
       <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">{content["page.contato.text"]}</p>
 
-      {service ? (
+      {subject ? (
         <div className="mt-8 max-w-xl rounded-[1.25rem] border border-primary/25 bg-accent/60 p-5">
           <p className="eyebrow">Assunto do contato</p>
-          <p className="mt-1 font-display text-xl leading-snug">{service.title}</p>
-          {service.short_description ? (
+          <p className="mt-1 font-display text-xl leading-snug">{subject}</p>
+          {service?.short_description ? (
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{service.short_description}</p>
           ) : null}
+          {options && <p className="mt-2 text-sm text-muted-foreground">{options}</p>}
           <p className="mt-2 text-xs text-muted-foreground">
-            O nome deste serviço vai junto na mensagem enviada para a equipe.
+            O assunto e as opções acima vão junto na mensagem para a equipe.
           </p>
         </div>
       ) : null}
@@ -59,6 +65,7 @@ function ContactPage() {
               <a href={waLink} target="_blank" rel="noreferrer">Abrir conversa</a>
             </Button>
           ) : null}
+          {phone && <a href={phone} className="mt-3 block text-xs text-primary underline">Ligar para a loja</a>}
         </div>
 
         <div className="rounded-[1.25rem] border border-border bg-card p-6">

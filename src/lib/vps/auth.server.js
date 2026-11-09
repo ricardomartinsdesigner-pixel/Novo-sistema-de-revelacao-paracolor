@@ -1,7 +1,9 @@
+import { adminMfaEnabled, beginAdminMfa, confirmAdminMfa, verifyAdminMfa } from "./admin-mfa.server";
 import { createHmac, randomInt, randomUUID } from "node:crypto";
 import { getPool, ensureDatabase, newPasswordHash, safeUser, verifyPassword } from "./db.server";
 import { clearSessionCookie, issueSession, sessionCookie } from "./session.server";
 import { makeServerBase44 } from "./server-client.server";
+import { loadSmtpConfig } from "@/lib/smtp-config.server";
 import { sendStoreEmail } from "@/lib/smtp-transport.server";
 import { isAllowedCustomerPassword } from "@/lib/password-policy";
 import { mayRegisterWithoutEmailConfirmation } from "@/lib/registration-policy";
@@ -10,7 +12,7 @@ const emailValue = (value) => String(value || "").trim().toLowerCase();
 const publicOrigin = (request) => (process.env.PUBLIC_APP_URL || new URL(request.url).origin).replace(/\/$/, "");
 const codeHash = (value) => createHmac("sha256", process.env.SESSION_SECRET).update(String(value)).digest("hex");
 const response = (data, status = 200, cookie) => Response.json(data, { status, headers: cookie ? { "set-cookie": cookie, "cache-control": "no-store" } : { "cache-control": "no-store" } });
-const errorResponse = (error) => response({ error: error.message || "Não foi possível concluir a operação." }, error.status || 400);
+const errorResponse = (error) => response({ error: error.message || "Não foi possível concluir a operação.", ...(error.code === "MFA_REQUIRED" ? { code: error.code } : {}) }, error.status || 400);
 
 async function sendCode(request, email, code, purpose) {
   const base44 = makeServerBase44(request);
@@ -95,7 +97,11 @@ async function login(data) {
   const user = rows[0]?.data;
   if (!user || !verifyPassword(String(data.password || ""), user.password_hash)) throw Object.assign(new Error("E-mail ou senha inválidos."), { status: 401 });
   if (user.is_verified !== true) throw new Error("Confirme seu e-mail antes de entrar.");
-  return response({ user: safeUser(user) }, 200, sessionCookie(issueSession(rows[0].id)));
+  const mfa = user.role === "admin" && await adminMfaEnabled(rows[0].id);
+  if (mfa && !await verifyAdminMfa(rows[0].id, String(data.otp || "").trim().toLowerCase())) {
+    throw Object.assign(new Error("Informe um código válido do autenticador ou um código de recuperação."), { status: 401, code: "MFA_REQUIRED" });
+  }
+  return response({ user: safeUser(user) }, 200, sessionCookie(issueSession(rows[0].id, mfa)));
 }
 
 async function resend(request, data) {
@@ -111,6 +117,11 @@ async function resend(request, data) {
 }
 
 async function forgot(request, data) {
+  const base44 = makeServerBase44(request);
+  const { items: [settings = {}] } = await base44.asServiceRole.entities.Settings.list({ sort: "-created_date", limit: 1 });
+  if (settings.email_enabled === false) return response({ ok: true, available: false });
+  try { await loadSmtpConfig(base44); }
+  catch { return response({ ok: true, available: false }); }
   const email = emailValue(data.email);
   const { rows } = await getPool().query("SELECT id FROM vps_records WHERE entity='User' AND lower(data->>'email')=$1 LIMIT 1", [email]);
   if (!rows[0]) return response({ ok: true });
@@ -121,15 +132,12 @@ async function forgot(request, data) {
     [email, codeHash(token), { user_id: rows[0].id }],
   );
   const origin = publicOrigin(request);
-  const base44 = makeServerBase44(request);
-  const settingsRows = await base44.asServiceRole.entities.Settings.list({ sort: "-created_date", limit: 1 });
-  const settings = settingsRows.items?.[0] || {};
   await sendStoreEmail(base44, settings, {
     to: email,
     subject: `${settings.store_name || "Paracolor"} · redefinição de senha`,
     text: `Acesse ${origin}/reset-password?token=${encodeURIComponent(token)} para criar uma nova senha. O link expira em 15 minutos.`,
     html: `<p><a href="${origin}/reset-password?token=${encodeURIComponent(token)}">Criar nova senha</a></p><p>O link expira em 15 minutos.</p>`,
-  });
+  }).catch(() => { console.warn("Falha no envio de recuperação de senha."); });
   return response({ ok: true });
 }
 
@@ -145,8 +153,8 @@ async function reset(data) {
   return response({ ok: true });
 }
 
-async function enforceRateLimit(request, action) {
-  const limits = { login: [10, 900], register: [5, 3600], verify: [8, 900], resend: [3, 3600], forgot: [4, 3600], reset: [8, 900] };
+export async function enforceRateLimit(request, action) {
+  const limits = { "order-lookup": [24, 900], analytics: [180, 60], login: [10, 900], register: [5, 3600], verify: [8, 900], resend: [3, 3600], forgot: [4, 3600], reset: [8, 900], "mfa-start": [6, 900], "mfa-confirm": [8, 900] };
   const policy = limits[action];
   if (!policy) return;
   const forwarded = request.headers.get("x-forwarded-for") || "unknown";
@@ -174,6 +182,13 @@ export async function handleAuth(request, action, currentUser) {
     if (action === "verify") return await verify(request, data);
     if (action === "resend") return await resend(request, data);
     if (action === "login") return await login(data);
+    if (request.method === "POST" && currentUser?.role === "admin") {
+      if (action === "mfa-start") return response(await beginAdminMfa(currentUser, String(data.password || "").slice(0, 160)));
+      if (action === "mfa-confirm") {
+        const codes = await confirmAdminMfa(currentUser, String(data.code || "").trim());
+        return response({ codes }, 200, sessionCookie(issueSession(currentUser.id, true)));
+      }
+    }
     if (action === "logout") return response({ ok: true }, 200, clearSessionCookie());
     if (action === "forgot") return await forgot(request, data);
     if (action === "reset") return await reset(data);

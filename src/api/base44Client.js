@@ -48,7 +48,7 @@ export const base44 = {
     hasToken: () => typeof window !== "undefined",
     setToken: () => {},
     async me() { return (await requestJson("/api/auth/me")).user; },
-    async login({ email, password }) { return requestJson("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }); },
+    async login({ email, password, otp }) { return requestJson("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password, otp }) }); },
     async register({ email, password, full_name, managed_account }) { return requestJson("/api/auth/register", { method: "POST", body: JSON.stringify({ email, password, full_name, managed_account }) }); },
     async verifyOtp({ email, otpCode }) { return requestJson("/api/auth/verify", { method: "POST", body: JSON.stringify({ email, otpCode }) }); },
     async resendOtp(email) { return requestJson("/api/auth/resend", { method: "POST", body: JSON.stringify({ email }) }); },
@@ -57,6 +57,8 @@ export const base44 = {
     async updateMe(data) { return requestJson("/api/auth/update", { method: "POST", body: JSON.stringify(data) }); },
     async logout() { await requestJson("/api/auth/logout", { method: "POST", body: "{}" }).catch(() => {}); window.location.assign("/"); },
     redirectToLogin(returnTo = window.location.href) { window.location.assign(`/login?returnTo=${encodeURIComponent(returnTo)}`); },
+    async beginAdminMfa(password) { return requestJson("/api/auth/mfa-start", { method: "POST", body: JSON.stringify({ password }) }); },
+    async confirmAdminMfa(code) { return requestJson("/api/auth/mfa-confirm", { method: "POST", body: JSON.stringify({ code }) }); },
     async loginWithProvider() { throw new Error("Login social ainda não foi configurado nesta instalação. Use e-mail e senha."); },
   },
 };

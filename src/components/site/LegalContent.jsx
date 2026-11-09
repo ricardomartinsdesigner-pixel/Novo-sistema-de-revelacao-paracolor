@@ -6,7 +6,7 @@ export default function LegalContent({ title, updated, sections }) {
       <p className="mt-2 text-xs text-muted-foreground">Última atualização: {updated}</p>
       <div className="mt-8 space-y-6">
         {sections.map((section) => (
-          <section key={section.heading}>
+          <section key={section.heading} id={section.id} className="scroll-mt-24">
             <h2 className="text-xl">{section.heading}</h2>
             {section.paragraphs.map((paragraph) => (
               <p key={paragraph} className="mt-2 text-sm leading-relaxed text-muted-foreground">

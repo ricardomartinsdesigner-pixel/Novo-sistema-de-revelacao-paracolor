@@ -51,6 +51,7 @@ function RootDocument({ children }) {
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <script src="/pwa-install.js" defer />
       </head>
       {/* data-react-root: the builder's preview bridge looks for #root and falls back to this. */}
       <body data-react-root="true">

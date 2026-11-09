@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { AREAS } from "@/lib/areas";
-import { CONTENT_DEFAULTS } from "@/lib/site-content";
+import { CONTENT_DEFAULTS, updatedContentValue } from "@/lib/site-content";
 
 /** Every editable text/image of the site, with the shipped copy as fallback. */
 export function useSiteContent() {
@@ -12,7 +12,7 @@ export function useSiteContent() {
       const items = Array.isArray(result) ? result : result?.items ?? [];
       const map = {};
       for (const item of items) {
-        if (item?.key && typeof item.value === "string" && item.value.trim()) map[item.key] = item.value;
+        if (item?.key && typeof item.value === "string" && item.value.trim()) map[item.key] = updatedContentValue(item.key, item.value);
       }
       return map;
     },

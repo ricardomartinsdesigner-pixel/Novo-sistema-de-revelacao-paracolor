@@ -1,24 +1,22 @@
-# Paracolor — versão para VPS
+# Paracolor 1.12.23 — Melhorias operacionais, analytics e consultas paginadas
 
-Esta cópia foi adaptada para executar em uma VPS sem o backend Base44. A aplicação roda em Node.js, persiste os dados no PostgreSQL e grava fotos/arquivos em um volume local. O Docker Compose também inicia o Caddy, que publica o site com HTTPS automático.
+Esta cópia foi preparada para executar em um computador Windows com Docker Desktop e publicar o site usando Cloudflare Tunnel, sem abrir portas no modem. A aplicação roda em Node.js, persiste os dados no PostgreSQL e grava fotos/arquivos em volumes Docker.
 
-## Requisitos
+O selo giratório da página inicial pode ser editado em **Administrador → Conteúdo do site → Home — topo**. O menu desktop mantém os links em uma linha, com espaçamento uniforme e sem divisor especial antes de Serviços.
 
-- VPS Ubuntu 22.04 ou superior, com pelo menos 2 GB de RAM recomendados.
-- Docker Engine e Docker Compose Plugin.
-- Um domínio apontado para o IP público da VPS.
-- Portas TCP 80 e 443 liberadas no firewall da VPS e do provedor.
+No **Montador de Polaroides em lote**, cada miniatura abre pelo lápis o mesmo editor usado no envio normal: enquadramento por arraste e pinça, zoom, rotação, espelhamento, efeitos de cor e escrita personalizada. O arquivo exportado usa esses ajustes. A saída Normal 9 × 11 cm continua em 9 × 12,7 cm, com a faixa preta embaixo.
 
-## Primeira instalação
+Na seção **Ferramentas**, a calculadora de adesivos monta folhas A4/A3 com base nas áreas vetoriais vermelhas dos PDFs de referência. A prévia mostra as marcas do laser e o resultado pode ser exportado em PDF e SVG 1:1, PNG em 300 dpi ou enviado para impressão. Margens e espaçamentos configurados ficam salvos no navegador, de forma independente por folha.
 
-1. Envie a pasta do projeto para a VPS ou clone o repositório.
-2. Copie `.env.example` para `.env`.
-3. Edite `.env`: informe `APP_DOMAIN`, e-mail do primeiro administrador e senhas fortes para PostgreSQL, sessão e conta administrativa.
-4. Gere um segredo aleatório para a sessão, por exemplo: `openssl rand -hex 32`.
-5. Inicie a aplicação: `docker compose up -d --build`.
-6. Acompanhe a inicialização com `docker compose logs -f app`.
-7. Abra `https://SEU_DOMINIO` e entre com o e-mail e a senha de administrador definidos em `.env`.
-8. No painel, configure SMTP em **Mensagens** antes de habilitar cadastro de clientes, recuperação de senha ou notificações.
+**Para instalar no Windows, siga primeiro o `GUIA_WINDOWS_CLOUDFLARE.md`.** Ele explica a configuração do `.env`, o início pelo `INICIAR_PARACOLOR.bat` e a criação do túnel. O `docker-compose.yml` desta cópia não usa o Caddy da versão para VPS.
+
+## Início rápido no Windows
+
+1. Extraia o ZIP para uma pasta local, por exemplo `C:\Paracolor`.
+2. Execute `INICIAR_PARACOLOR.bat`. Na primeira vez, ele cria e abre o `.env` para edição.
+3. Salve as senhas, domínio e e-mail de administrador no `.env`.
+4. Execute `INICIAR_PARACOLOR.bat` novamente. Se o token da Cloudflare estiver preenchido, o túnel também será iniciado.
+5. Consulte `GUIA_WINDOWS_CLOUDFLARE.md` para os passos completos e para manter o Wix no ar durante os testes.
 
 O primeiro acesso cria as tabelas necessárias e a conta administrativa inicial. Depois da criação, alterar `BOOTSTRAP_ADMIN_PASSWORD` não redefine a senha já gravada no banco. Para trocar a senha, use o fluxo de recuperação ou a administração de usuários.
 
@@ -45,7 +43,7 @@ Para atualizar manualmente, faça backup e execute `docker compose up -d --build
 - PostgreSQL: serviço `db`, volume Docker `postgres_data`.
 - Fotos e documentos enviados: volume Docker `uploads_data`, no caminho `/var/lib/paracolor/uploads` dentro do container.
 - Backups completos: volume Docker `backups_data`, no caminho `/var/lib/paracolor/backups`. No painel **Administrador → Configurações → Backup completo e restauração**, é possível baixar um arquivo com o banco, uploads e snapshot das configurações; configurar backup diário pelo horário de Brasília e retenção de 1 a 60 cópias; e restaurar um arquivo após confirmação. Antes de restaurar, o sistema salva o estado atual para recuperação.
-- Certificados HTTPS e configuração do Caddy: volumes `caddy_data` e `caddy_config`.
+- O HTTPS público é entregue pela Cloudflare quando o túnel está configurado; o aplicativo fica acessível localmente na porta 3000.
 - Verificação de saúde: `https://SEU_DOMINIO/api/health`.
 
 O backup inclui dados do PostgreSQL, arquivos enviados e um snapshot das configurações de execução. Esse arquivo contém dados pessoais e segredos: mantenha-o protegido. O snapshot de variáveis é apenas informativo; credenciais de ambiente devem ser configuradas novamente no `.env`/ambiente do servidor após migração. Para recuperação fora do painel, faça também uma cópia externa dos volumes Docker, que não depende do disco do servidor.
@@ -60,7 +58,7 @@ O Mercado Pago e o Melhor Envio podem ser configurados no painel ou por `MERCADO
 - Persistência de entidades em PostgreSQL e regras de acesso por proprietário/administrador na camada local.
 - Envio de fotos e arquivos privados/públicos para armazenamento persistente na VPS, com links assinados para arquivos privados.
 - SMTP executado em Node.js.
-- Aplicação empacotada para Docker e publicada pelo Caddy com TLS.
+- Aplicação empacotada para Docker; a publicação externa usa o container `cloudflared` no perfil `public`.
 - Mercado Pago e Melhor Envio continuam integrados por configuração segura do servidor.
 - Releases GitHub com atualização administrável e checksum SHA-256.
 - Prazos independentes para revelação e polaroides em dias úteis, horas ou minutos.
@@ -85,3 +83,24 @@ docker compose down
 ```
 
 `docker compose down` preserva os volumes. **Não use `docker compose down -v`** se quiser manter banco, fotos e certificados.
+
+## Cupons e campanhas
+
+Em **Administrador → Catálogo → Cupons → Nova campanha**, escolha cupom exclusivo, cupom público ou desconto automático. O cupom exclusivo exige conta selecionada e validade, e usa uma utilização como padrão. As datas do formulário seguem o horário de Brasília. Cupons antigos continuam funcionando com as regras já cadastradas.
+
+As campanhas aceitam mínimo de valor e de unidades nos itens elegíveis, teto do desconto e limites de uso. Os avisos públicos são opcionais, em faixa ou pop-up na página inicial. Um cupom inserido no carrinho substitui o desconto automático; sem código, vale a maior oferta automática elegível. Por padrão, as campanhas novas não acumulam desconto sobre itens que usam tabela profissional ou preço promocional.
+
+Pedidos com limite de uso reservam o cupom ao serem criados. No pagamento online, a vigência da cobrança é de 72 horas; uma cobrança já aberta só libera a reserva após o prazo, a margem de compensação e a conferência de que não há pagamento válido em andamento. Pedidos para pagamento na loja liberam a reserva quando cancelados.
+
+
+## Instalar a loja no celular
+
+A loja oferece um convite de instalação nas páginas de navegação. O Chrome no Android pode confirmar a instalação pelo botão **Adicionar** quando o navegador disponibilizar a janela de instalação. O Safari no iPhone adiciona a loja por **Compartilhar → Adicionar à Tela de Início**. O link **Instalar aplicativo**, na coluna **Ajuda** do rodapé, permite abrir o fluxo novamente.
+
+Na publicação, sirva a loja por HTTPS e mantenha o manifesto e os ícones públicos no mesmo domínio. O aplicativo abre a loja em uma janela própria e usa a conexão com o servidor para fotos, carrinho e pagamentos.
+
+Veja [Pagamentos e publicação HTTPS](docs/PAGAMENTOS_E_HTTPS.md) para configurar Pix Sicoob, InfinitePay, Stone/Pagar.me e a autenticação em duas etapas.
+
+## Acesso aos arquivos de pedidos
+
+Os arquivos privados de um pedido precisam pertencer à conta que o criou. Os links de download são válidos para a conta que os gerou enquanto ela estiver autenticada. Após atualizar de uma versão anterior, abra o pedido e gere um novo link. Se um pedido antigo tiver arquivos importados sem proprietário ou associados a outra conta, confira a origem desses arquivos antes de solicitar o reenvio pelo cliente.

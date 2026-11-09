@@ -2,13 +2,12 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { FileText, Loader2, ShoppingBag, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart";
 import { uid } from "@/lib/uid";
 import { useEntityList } from "@/lib/store";
-import { loadImage } from "@/lib/photo";
-import { ART_ACCEPT, isPdfFile, prepareUploads } from "@/lib/upload-formats";
+import { usePrivateImageUploads } from "@/hooks/use-private-image-uploads";
+import { ART_ACCEPT } from "@/lib/upload-formats";
 import { formatBRL } from "@/lib/areas";
 
 export default function BannerConfigurator() {
@@ -24,8 +23,11 @@ export default function BannerConfigurator() {
   const [finishIds, setFinishIds] = useState([]);
   const [qty, setQty] = useState(1);
   const [artMode, setArtMode] = useState("upload");
-  const [art, setArt] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const uploads = usePrivateImageUploads();
+  const art = uploads.files.art;
+  const failure = uploads.failures.art;
+  const busy = uploads.active !== null;
+  const [instructions, setInstructions] = useState("");
   const [showGuide, setShowGuide] = useState(true);
 
   const SAFETY_CM = 3;
@@ -55,33 +57,6 @@ export default function BannerConfigurator() {
     return dpi;
   }, [art, effective.width, effective.height]);
 
-  async function handleArt(input) {
-    if (!input) return;
-    setBusy(true);
-    try {
-      const { files } = await prepareUploads([input]);
-      const file = files[0];
-      if (!file) throw new Error("Não foi possível converter o arquivo.");
-      const pdf = isPdfFile(file);
-      let preview = "";
-      let w = 0;
-      let h = 0;
-      if (!pdf) {
-        preview = URL.createObjectURL(file);
-        const image = await loadImage(preview);
-        w = image.naturalWidth;
-        h = image.naturalHeight;
-      }
-      const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
-      setArt({ name: file.name, preview, file_uri, w, h, pdf });
-      toast.success(pdf ? "PDF enviado — será impresso como está" : "Arte enviada");
-    } catch {
-      toast.error("Não foi possível ler este arquivo. Envie em JPG, PNG, AVIF, HEIC ou PDF.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   function addToCart() {
     if (!activeSize) {
       toast.error("Nenhum tamanho de banner cadastrado ainda.");
@@ -95,7 +70,7 @@ export default function BannerConfigurator() {
       toast.error("Envie a arte ou escolha a opção de criação pela equipe.");
       return;
     }
-    addItems([
+    if (!addItems([
       {
         key: uid(),
         area: "banner",
@@ -111,6 +86,7 @@ export default function BannerConfigurator() {
           material_id: activeMaterial?.id || "",
           finish_ids: finishIds,
           art_mode: artMode,
+          instructions: instructions.trim(),
           art_file_uri: artMode === "upload" ? art?.file_uri || "" : "",
           art_original_name: artMode === "upload" ? art?.name || "" : "",
           art_approval_mode: artMode === "equipe" ? "obrigatoria" : "opcional",
@@ -119,7 +95,7 @@ export default function BannerConfigurator() {
           preview_uri: artMode === "upload" ? art?.file_uri || "" : "",
         },
       },
-    ]);
+    ])) return;
     toast.success("Banner adicionado ao carrinho");
     navigate({ to: "/carrinho" });
   }
@@ -239,9 +215,15 @@ export default function BannerConfigurator() {
               <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-gold/60 p-4 text-sm hover:border-gold hover:bg-gold-soft/25 text-muted-foreground">
                 <Upload className="h-4 w-4" />
                 {art ? art.name : "Escolher arquivo da arte"}
-                <input type="file" accept={ART_ACCEPT} className="hidden" onChange={(event) => handleArt(event.target.files?.[0])} />
+                <input type="file" accept={ART_ACCEPT} className="hidden" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; void uploads.upload("art", file); }} />
               </label>
               {busy && <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Enviando arte…</p>}
+              {art && !busy && !failure && <p role="status" className="mt-2 text-xs text-primary">Arte enviada</p>}
+              {failure && <div className="mt-2 text-xs" role="alert">
+                <p className="text-destructive">{failure.name} · {failure.message}</p>
+                {art && <p className="mt-1 text-muted-foreground">A arte enviada anteriormente continua selecionada.</p>}
+                {failure.retryable && <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => uploads.retry("art")}>Tentar reenviar</Button>}
+              </div>}
               {resolution !== null && (
                 <p className={`mt-2 text-xs ${resolution < 100 ? "text-red-600" : "text-muted-foreground"}`}>
                   Resolução da arte neste tamanho: {resolution} DPI {resolution < 100 ? "— abaixo do recomendado (100 DPI)" : ""}
@@ -249,6 +231,17 @@ export default function BannerConfigurator() {
               )}
             </div>
           )}
+          <label className="mt-4 block text-sm font-medium">
+            Instruções para o banner (opcional)
+            <textarea
+              value={instructions}
+              onChange={(event) => setInstructions(event.target.value)}
+              maxLength={1000}
+              rows={3}
+              placeholder="Ex.: escrever “Feliz aniversário, Ana!” em destaque"
+              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            />
+          </label>
         </section>
       </div>
 

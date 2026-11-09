@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
 import { ensureSettings } from "@/lib/store-fns";
 
 export function useSettings() {
@@ -29,6 +30,8 @@ export function useEntityList(entity, query = {}, options = {}) {
 const signedCache = new Map();
 
 export function useSignedUrl(fileUri) {
+  const { user } = useAuth();
+  const viewer = user?.id || "";
   const [url, setUrl] = useState("");
 
   useEffect(() => {
@@ -37,11 +40,12 @@ export function useSignedUrl(fileUri) {
       setUrl("");
       return () => {};
     }
-    if (/^https?:\/\//.test(fileUri)) {
+    if (/^(https?:\/\/|\/api\/files\/)/.test(fileUri)) {
       setUrl(fileUri);
       return () => {};
     }
-    const cached = signedCache.get(fileUri);
+    const key = `${viewer}:${fileUri}`;
+    const cached = signedCache.get(key);
     if (cached && cached.expires > Date.now()) {
       setUrl(cached.url);
       return () => {};
@@ -51,7 +55,7 @@ export function useSignedUrl(fileUri) {
       .then((result) => {
         if (!active) return;
         const next = result?.signed_url ?? "";
-        if (next) signedCache.set(fileUri, { url: next, expires: Date.now() + 50 * 60 * 1000 });
+        if (next) signedCache.set(key, { url: next, expires: Date.now() + 50 * 60 * 1000 });
         setUrl(next);
       })
       .catch(() => {
@@ -60,7 +64,7 @@ export function useSignedUrl(fileUri) {
     return () => {
       active = false;
     };
-  }, [fileUri]);
+  }, [fileUri, viewer]);
 
   return url;
 }

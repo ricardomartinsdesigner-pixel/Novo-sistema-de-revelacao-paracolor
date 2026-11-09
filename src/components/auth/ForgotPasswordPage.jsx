@@ -13,25 +13,30 @@ export function ForgotPasswordPage() {
   const returnTo = safeReturnTo();
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [result, setResult] = useState("");
 
   async function submit(e) {
     e.preventDefault();
     setBusy(true);
     try {
-      await base44.auth.resetPasswordRequest(email);
+      const response = await base44.auth.resetPasswordRequest(email);
+      setResult(response.available === false ? "unavailable" : "requested");
     } catch {
-      // Same outcome either way.
+      setResult("error");
     } finally {
       setBusy(false);
-      setSent(true);
     }
   }
 
   return (
     <AuthLayout icon={Mail} title="Recuperar senha" subtitle="Enviaremos um link para você redefinir">
-      {sent ? (
-        <p className="text-center text-sm text-foreground">Se existir uma conta com este e-mail, você receberá um link de redefinição em instantes.</p>
+      {result ? (
+        <div role="status" className="rounded-lg bg-accent/60 p-3 text-center text-sm">
+          {result === "unavailable" ? "A recuperação por e-mail está indisponível. Fale com a loja para recuperar o acesso."
+            : result === "error" ? "Não foi possível concluir a solicitação agora. Tente novamente ou fale com a loja."
+            : "Se houver uma conta com esse e-mail, procure o link na caixa de entrada e no spam."}
+          <button type="button" className="mx-auto mt-2 block text-xs text-primary underline" onClick={() => setResult("")}>Voltar ao formulário</button>
+        </div>
       ) : (
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-2">
@@ -46,6 +51,7 @@ export function ForgotPasswordPage() {
           </SubmitButton>
         </form>
       )}
+      <p className="mt-5 text-center text-sm"><AuthLink to="/contato">Falar com a loja sobre meu acesso</AuthLink></p>
       <p className="mt-6 text-center text-sm text-muted-foreground">
         <AuthLink to="/login" returnTo={returnTo}>
           <ArrowLeft className="mr-1 inline h-3 w-3" aria-hidden="true" />

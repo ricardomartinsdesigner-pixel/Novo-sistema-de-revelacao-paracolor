@@ -1,5 +1,6 @@
 import { FileText } from "lucide-react";
 import PolaroidPreview from "@/components/studio/PolaroidPreview";
+import { photoColorFilter } from "@/lib/photo-color-effects";
 import { computeLayout, printAspect } from "@/lib/photo";
 
 // Miniatura fiel ao arquivo de impressão: mostra o formato, a borda branca,
@@ -74,6 +75,7 @@ export default function PhotoThumb({ photo, model }) {
                 maxWidth: "none",
                 objectFit: photo.fit === "contain" ? "contain" : "cover",
                 objectPosition: "center",
+                filter: photoColorFilter(photo.colorEffect),
                 transform: `translate(-50%, -50%) rotate(${photo.rotation || 0}deg) scale(${
                   photo.flipH ? -1 : 1
                 }, ${photo.flipV ? -1 : 1})`,

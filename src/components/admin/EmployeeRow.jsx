@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Loader2, Lock, Unlock, Trash2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { removeEmployee, resendEmployeeInvite, setEmployeeActive } from "@/lib/team-fns";
+import { removeEmployee, resendEmployeeInvite, setEmployeeActive, setEmployeeRole } from "@/lib/team-fns";
+import { STAFF_ROLES, roleLabel } from "@/lib/staff-access";
 
 export default function EmployeeRow({ employee, onChanged }) {
   const [busy, setBusy] = useState("");
@@ -33,6 +34,19 @@ export default function EmployeeRow({ employee, onChanged }) {
     }
   }
 
+  async function changeRole(access_role) {
+    setBusy("role");
+    try {
+      await setEmployeeRole({ data: { id: employee.id, access_role } });
+      toast.success(`Acesso alterado para ${roleLabel(access_role)}.`);
+      await onChanged();
+    } catch (error) {
+      toast.error(error?.message || "Não foi possível alterar o nível de acesso.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function remove() {
     setBusy("remove");
     try {
@@ -56,9 +70,16 @@ export default function EmployeeRow({ employee, onChanged }) {
       <td className="px-3 py-2 text-xs text-muted-foreground">{employee.phone || "—"}</td>
       <td className="px-3 py-2 text-xs">{employee.job_title || "Funcionário"}</td>
       <td className="px-3 py-2 text-xs">
-        <span className={`rounded-full px-2 py-0.5 ${employee.active ? "bg-emerald-500/10 text-emerald-700" : "bg-muted text-muted-foreground"}`}>
-          {employee.active ? "Acesso ativo" : "Bloqueado"}
-        </span>
+        <div className="flex flex-col items-start gap-1.5">
+          <span className={`rounded-full px-2 py-0.5 ${employee.active ? "bg-emerald-500/10 text-emerald-700" : "bg-muted text-muted-foreground"}`}>
+            {employee.active ? "Acesso ativo" : "Bloqueado"}
+          </span>
+          <select aria-label={`Nível de acesso de ${employee.name}`} value={employee.access_role || "admin"}
+            onChange={(event) => changeRole(event.target.value)} disabled={Boolean(busy)}
+            className="h-8 max-w-40 rounded-md border border-input bg-background px-2 text-xs">
+            {STAFF_ROLES.map((role) => <option key={role} value={role}>{roleLabel(role)}</option>)}
+          </select>
+        </div>
       </td>
       <td className="px-3 py-2">
         <div className="flex flex-wrap justify-end gap-2">

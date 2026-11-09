@@ -47,7 +47,7 @@ function ProductPage() {
           <Link to="/personalizados" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-3.5 w-3.5" /> Voltar para a loja
           </Link>
-          <p className="eyebrow mt-5">{product.category || "Personalizado"}</p>
+          <p className="eyebrow mt-5">{[product.category, product.subcategory].filter(Boolean).join(" · ") || "Personalizado"}</p>
           <h1 className="mt-2 max-w-3xl text-4xl leading-[1.08] sm:text-5xl">{product.name}</h1>
           {product.short_description ? (
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">{product.short_description}</p>

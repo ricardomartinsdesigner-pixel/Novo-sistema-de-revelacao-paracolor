@@ -23,19 +23,27 @@ function PersonalizadosPage() {
   const { settings } = useSettings();
   const { content } = useSiteContent();
   const area = useAreas().find((item) => item.key === "personalizados");
-  const { data: products = [] } = useEntityList("CustomProduct", { active: true }, { sort: "sort" });
+  const { data: catalogProducts = [] } = useEntityList("CustomProduct", { active: true }, { sort: "sort" });
+  const products = catalogProducts.filter((product) => !["album", "book"].includes(product.catalog_type));
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("todas");
+  const [subcategory, setSubcategory] = useState("todas");
   const [priceRange, setPriceRange] = useState("todos");
 
   const categories = useMemo(
     () => ["todas", ...Array.from(new Set(products.map((product) => product.category).filter(Boolean)))],
     [products]
   );
+  const subcategories = useMemo(
+    () => ["todas", ...Array.from(new Set(products.filter((product) => category === "todas" || product.category === category).map((product) => product.subcategory).filter(Boolean)))],
+    [products, category]
+  );
 
   const filtered = products.filter((product) => {
     if (category !== "todas" && product.category !== category) return false;
-    if (query && !`${product.name} ${product.short_description || ""}`.toLowerCase().includes(query.toLowerCase())) return false;
+    if (subcategory !== "todas" && product.subcategory !== subcategory) return false;
+    const searchText = `${product.name} ${product.category || ""} ${product.subcategory || ""} ${product.short_description || ""}`.toLowerCase();
+    if (query && !searchText.includes(query.toLowerCase())) return false;
     const price = effectivePrice(product, settings);
     if (priceRange === "ate50" && price > 50) return false;
     if (priceRange === "50a100" && (price < 50 || price > 100)) return false;
@@ -43,7 +51,7 @@ function PersonalizadosPage() {
     return true;
   });
 
-  const hasFilters = Boolean(query) || category !== "todas" || priceRange !== "todos";
+  const hasFilters = Boolean(query) || category !== "todas" || subcategory !== "todas" || priceRange !== "todos";
 
   return (
     <div>
@@ -78,7 +86,7 @@ function PersonalizadosPage() {
 
       <section className="container-x py-10 sm:py-14">
         <div className="rounded-[1.25rem] border border-border bg-card p-3 sm:p-4">
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
             <div className="relative">
               <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -90,12 +98,19 @@ function PersonalizadosPage() {
             </div>
             <select
               value={category}
-              onChange={(event) => setCategory(event.target.value)}
+              onChange={(event) => { setCategory(event.target.value); setSubcategory("todas"); }}
               className="w-full rounded-full border border-input bg-background px-4 py-2.5 text-sm sm:w-auto"
             >
               {categories.map((item) => (
                 <option key={item} value={item}>{item === "todas" ? "Todas as categorias" : item}</option>
               ))}
+            </select>
+            <select
+              value={subcategory}
+              onChange={(event) => setSubcategory(event.target.value)}
+              className="w-full rounded-full border border-input bg-background px-4 py-2.5 text-sm sm:w-auto"
+            >
+              {subcategories.map((item) => <option key={item} value={item}>{item === "todas" ? "Todas as subcategorias" : item}</option>)}
             </select>
             <select
               value={priceRange}
@@ -121,6 +136,7 @@ function PersonalizadosPage() {
                 onClick={() => {
                   setQuery("");
                   setCategory("todas");
+                  setSubcategory("todas");
                   setPriceRange("todos");
                 }}
               >
@@ -159,8 +175,8 @@ function PersonalizadosPage() {
                   </Link>
 
                   <div className="flex flex-1 flex-col p-5">
-                    {product.category ? (
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-gold-deep">{product.category}</p>
+                    {product.category || product.subcategory ? (
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-gold-deep">{[product.category, product.subcategory].filter(Boolean).join(" · ")}</p>
                     ) : null}
                     <h2 className="mt-1.5 text-xl leading-snug">{product.name}</h2>
                     <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">

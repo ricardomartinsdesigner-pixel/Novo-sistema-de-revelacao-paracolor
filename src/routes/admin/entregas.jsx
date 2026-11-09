@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, MapPin, Store } from "lucide-react";
 import { toast } from "sonner";
-import { base44 } from "@/api/base44Client";
+import { OrderQueueSearch, OrderQueueFooter, useOrderQueue } from "@/components/admin/OrderQueueControls";
 import { updateOrderStatus } from "@/lib/store-fns";
 import { orderLabel } from "@/lib/order-paths";
 import MelhorEnvioConfig from "@/components/admin/MelhorEnvioConfig";
-import { formatDate } from "@/lib/areas";
+import OrderCustomerBadges from "@/components/admin/OrderCustomerBadges";
+import { formatBRL, formatDate } from "@/lib/areas";
+import { awaitsPickupPayment } from "@/lib/order-payment";
 
 export const Route = createFileRoute("/admin/entregas")({
   head: () => ({ meta: [{ title: "Entregas — Paracolor" }] }),
@@ -26,6 +28,8 @@ function DeliveryCard({ order, actionLabel, busy, onAction }) {
         <span className="text-[11px] text-muted-foreground">{formatDate(order.created_date)}</span>
       </div>
       <p className="mt-0.5 truncate text-xs text-muted-foreground">{order.customer_name}</p>
+      <OrderCustomerBadges order={order} />
+      {awaitsPickupPayment(order) && <p className="mt-2 text-sm font-semibold">{formatBRL(order.total)} a receber</p>}
       <p className="mt-2 flex items-start gap-1 text-[11px] text-muted-foreground">
         {delivery ? <MapPin className="mt-0.5 h-3 w-3 flex-none" /> : <Store className="mt-0.5 h-3 w-3 flex-none" />}
         {delivery ? order.shipping_address || `CEP ${order.shipping_cep || "não informado"}` : "Retirada na loja"}
@@ -48,42 +52,39 @@ function DeliveriesPage() {
   const [busyId, setBusyId] = useState("");
   const advance = useServerFn(updateOrderStatus);
 
-  const { data: orders = [], isPending } = useQuery({
-    queryKey: ["admin-entregas"],
-    queryFn: async () =>
-      (await base44.entities.Order.filter(
-        { payment_status: "aprovado", status: { $in: ["aguardando_conferencia", "pronto", "enviado"] } },
-        { sort: "created_date", limit: 120 }
-      )).items ?? [],
-  });
+  const queue = useOrderQueue("deliveries", "admin-entregas");
+  const { orders, isPending } = queue;
 
   const mutation = useMutation({
     mutationFn: ({ order, status }) => advance({ data: { order_id: order.id, status } }),
     onMutate: ({ order }) => setBusyId(order.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-entregas"] }),
+    onSuccess: (_, { order, status }) => {
+      if (status === "pagamento_aprovado") toast.success("Recebimento confirmado. A retirada pode ser registrada.");
+      return Promise.all([
+        ["admin-entregas"], ["admin-producao"], ["admin-payments"], ["admin-payments-pending"], ["Order"], ["admin-order", order.id],
+      ].map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+    },
     onError: (error) => toast.error(error.message || "Não foi possível atualizar o pedido."),
     onSettled: () => setBusyId(""),
   });
 
   const toShip = orders.filter((order) => order.fulfillment === "entrega" && order.status !== "enviado");
-  const toPickup = orders.filter((order) => order.fulfillment !== "entrega" && order.status !== "enviado");
+  const toPickup = orders.filter((order) => order.fulfillment !== "entrega" && !["retirado", "enviado", "concluido"].includes(order.status));
   const inTransit = orders.filter((order) => order.status === "enviado");
 
   const columns = [
     { key: "ship", title: "Para enviar", list: toShip, label: "Marcar enviado", status: "enviado" },
-    { key: "pickup", title: "Para retirar", list: toPickup, label: "Marcar retirado", status: "concluido" },
-    { key: "transit", title: "Saiu / retirado", list: inTransit, label: "Concluir pedido", status: "concluido" },
+    { key: "pickup", title: "Para retirar", list: toPickup, label: "Marcar retirado", status: "retirado" },
+    { key: "transit", title: "Em trânsito", list: inTransit, label: "Concluir pedido", status: "concluido" },
   ];
 
   return (
     <div>
       <p className="eyebrow">Operação</p>
       <h1 className="mt-1 text-3xl">Entregas</h1>
-      <p className="mt-1 text-xs text-muted-foreground">Pedidos pagos prontos para envio, retirada ou já em trânsito.</p>
+      <p className="mt-1 text-xs text-muted-foreground">Envios e retiradas. Confira os valores a receber no balcão antes de dar baixa.</p>
 
-      <div className="mt-5">
-        <MelhorEnvioConfig />
-      </div>
+      <OrderQueueSearch queue={queue} />
 
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         {columns.map((column) => (
@@ -97,9 +98,11 @@ function DeliveriesPage() {
                 <DeliveryCard
                   key={order.id}
                   order={order}
-                  actionLabel={column.label}
+                  actionLabel={awaitsPickupPayment(order) ? "Confirmar recebimento" : column.label}
                   busy={busyId === order.id}
-                  onAction={(target) => mutation.mutate({ order: target, status: column.status })}
+                  onAction={(target) => mutation.mutate({
+                    order: target, status: awaitsPickupPayment(target) ? "pagamento_aprovado" : column.status,
+                  })}
                 />
               ))}
               {!column.list.length && (
@@ -109,6 +112,11 @@ function DeliveriesPage() {
           </section>
         ))}
       </div>
+      <OrderQueueFooter queue={queue} />
+      <details className="mt-8">
+        <summary className="cursor-pointer text-sm font-medium">Configuração do Melhor Envio</summary>
+        <MelhorEnvioConfig />
+      </details>
     </div>
   );
 }

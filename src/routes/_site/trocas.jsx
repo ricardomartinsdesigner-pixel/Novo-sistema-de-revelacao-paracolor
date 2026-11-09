@@ -14,6 +14,7 @@ export const Route = createFileRoute("/_site/trocas")({
       updated="novembro de 2026"
       sections={[
         {
+          id: "retirada-entrega",
           heading: "Retirada e entrega",
           paragraphs: [
             "A retirada na loja é a opção padrão e não tem custo. Avisamos por e-mail e WhatsApp quando o pedido está pronto.",
@@ -21,6 +22,7 @@ export const Route = createFileRoute("/_site/trocas")({
           ],
         },
         {
+          id: "cancelamento",
           heading: "Cancelamento",
           paragraphs: [
             "Pedidos com pagamento pendente podem ser cancelados pelo atendimento.",

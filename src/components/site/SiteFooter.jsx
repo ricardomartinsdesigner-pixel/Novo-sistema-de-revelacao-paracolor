@@ -1,26 +1,30 @@
 import { Link } from "@tanstack/react-router";
 import { Clock, Instagram, Mail, MapPin, MessageCircle, Phone, ShieldCheck } from "lucide-react";
+import ToolsDialog from "@/components/site/ToolsDialog";
 import { moduleEnabled, useSettings } from "@/lib/store";
 import { useAreas, useSiteContent } from "@/hooks/use-site-content";
 import { instagramHandle, instagramUrl, telHref, whatsappUrl } from "@/lib/contact";
+import { publicPageEnabled } from "@/lib/public-pages";
+import { Image } from "@/components/ui/image";
 
 const HELP_LINKS = [
-  { label: "Minha conta", to: "/minha-conta" },
-  { label: "Meus pedidos", to: "/minha-conta" },
-  { label: "Consultar pedido", to: "/consultar-pedido" },
-  { label: "Contato", to: "/contato" },
-  { label: "Perguntas frequentes", to: "/#duvidas" },
+  { label: "Minha conta", to: "/minha-conta", setting: "page_minha_conta" },
+  { label: "Meus pedidos", to: "/minha-conta", setting: "page_minha_conta" },
+  { label: "Consultar pedido", to: "/consultar-pedido", setting: "page_consultar_pedido" },
+  { label: "Calcular meu pedido", to: "/simulador", setting: "page_simulador" },
+  { label: "Contato", to: "/contato", setting: "page_contato" },
+  { label: "Perguntas frequentes", to: "/#duvidas", setting: "page_home" },
 ];
 
 const LEGAL_LINKS = [
-  { label: "Política de privacidade", to: "/privacidade" },
-  { label: "Termos de uso", to: "/termos" },
-  { label: "Entrega, troca e cancelamento", to: "/trocas" },
+  { label: "Política de privacidade", to: "/privacidade", setting: "page_privacidade" },
+  { label: "Termos de uso", to: "/termos", setting: "page_termos" },
+  { label: "Entrega, troca e cancelamento", to: "/trocas", setting: "page_trocas" },
 ];
 
 const COLUMN_TITLE = "text-[11px] uppercase tracking-[0.24em] text-gold";
 
-export default function SiteFooter() {
+export default function SiteFooter({ onInstallApp }) {
   const { settings } = useSettings();
   const { content } = useSiteContent();
   const allAreas = useAreas();
@@ -31,6 +35,8 @@ export default function SiteFooter() {
   const whatsapp = whatsappUrl(settings?.whatsapp);
   const phone = telHref(settings?.phone);
   const hours = String(settings?.hours || "").trim();
+  const helpLinks = HELP_LINKS.filter((link) => publicPageEnabled(settings, link.setting));
+  const legalLinks = LEGAL_LINKS.filter((link) => publicPageEnabled(settings, link.setting));
   const shopLinks = allAreas
     .filter((area) => moduleEnabled(settings, area.key))
     .map((area) => ({ label: area.label, to: area.path }));
@@ -44,8 +50,8 @@ export default function SiteFooter() {
       <div className="gold-rule pointer-events-none absolute inset-x-0 top-0" />
       <div className="container-x grid gap-10 py-16 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <Link to="/" className="font-display text-2xl tracking-[0.1em]">
-            {storeName}
+          <Link to="/" className="inline-flex max-w-full items-center" aria-label={storeName}>
+            <Image src="/brand/paracolor-logo.png" alt={storeName} className="h-auto w-[220px] max-w-full object-contain" fittingType="fit" />
           </Link>
           <p className="mt-1 h-px w-12 bg-gold" />
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-ink-foreground/65">{content["brand.footer_text"]}</p>
@@ -95,13 +101,13 @@ export default function SiteFooter() {
                 <Mail className="h-4 w-4" />
               </a>
             ) : null}
-            <Link
+            {publicPageEnabled(settings, "page_contato") ? <Link
               to="/contato"
               aria-label={`Falar com a ${storeName}`}
               className="rounded-full border border-ink-foreground/35 p-2 text-ink-foreground/70 transition hover:border-gold hover:text-gold"
             >
               <MessageCircle className="h-4 w-4" />
-            </Link>
+            </Link> : null}
           </div>
           {whatsapp ? (
             <a
@@ -131,20 +137,26 @@ export default function SiteFooter() {
         <div>
           <p className={COLUMN_TITLE}>Ajuda</p>
           <ul className="mt-4 space-y-3 text-sm text-ink-foreground/70">
-            {HELP_LINKS.map((link) => (
+            {helpLinks.map((link) => (
               <li key={link.label}>
                 <Link to={link.to} className="transition hover:text-gold">
                   {link.label}
                 </Link>
               </li>
             ))}
+            <li><ToolsDialog /></li>
+            {onInstallApp && <li>
+              <button type="button" onClick={onInstallApp} className="text-left transition hover:text-gold">
+                Instalar aplicativo
+              </button>
+            </li>}
           </ul>
         </div>
 
         <div>
           <p className={COLUMN_TITLE}>Institucional</p>
           <ul className="mt-4 space-y-3 text-sm text-ink-foreground/70">
-            {LEGAL_LINKS.map((link) => (
+            {legalLinks.map((link) => (
               <li key={link.label}>
                 <Link to={link.to} className="transition hover:text-gold">
                   {link.label}

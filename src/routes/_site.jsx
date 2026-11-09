@@ -4,8 +4,13 @@ import MaintenanceScreen from "@/components/site/MaintenanceScreen";
 import { CartProvider } from "@/lib/cart";
 import { useAuth } from "@/lib/AuthContext";
 import { useSettings } from "@/lib/store";
+import SiteAnalyticsTracker from "@/components/site/SiteAnalyticsTracker";
 
 export const Route = createFileRoute("/_site")({
+  head: () => ({ links: [
+    { rel: "manifest", href: "/manifest.webmanifest" },
+    { rel: "apple-touch-icon", href: "/icons/paracolor-apple-180.png" },
+  ] }),
   component: SiteRoute,
 });
 
@@ -16,6 +21,9 @@ function SiteRoute() {
   const blocked = Boolean(settings?.maintenance_enabled) && user?.role !== "admin";
 
   return (
-    <CartProvider>{blocked ? <MaintenanceScreen settings={settings} /> : <SiteLayout />}</CartProvider>
+    <CartProvider settings={settings}>
+      <SiteAnalyticsTracker />
+      {blocked ? <MaintenanceScreen settings={settings} /> : <SiteLayout />}
+    </CartProvider>
   );
 }

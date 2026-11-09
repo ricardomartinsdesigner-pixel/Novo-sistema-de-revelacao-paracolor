@@ -2,8 +2,10 @@ import { Link } from "@tanstack/react-router";
 import { Loader2, MapPin, Printer, Store } from "lucide-react";
 import { formatDate } from "@/lib/areas";
 import { orderLabel } from "@/lib/order-paths";
+import OrderCountdown from "@/components/orders/OrderCountdown";
+import OrderCustomerBadges from "@/components/admin/OrderCustomerBadges";
 
-export default function ProductionCard({ order, actionLabel, onAdvance, busy }) {
+export default function ProductionCard({ order, actionLabel, onAdvance, busy, disabled }) {
   const isDelivery = order.fulfillment === "entrega";
 
   return (
@@ -24,6 +26,7 @@ export default function ProductionCard({ order, actionLabel, onAdvance, busy }) 
       </div>
 
       <p className="mt-0.5 truncate text-xs text-muted-foreground">{order.customer_name}</p>
+      <OrderCustomerBadges order={order} />
 
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
         <span className="inline-flex items-center gap-1">
@@ -36,10 +39,12 @@ export default function ProductionCard({ order, actionLabel, onAdvance, busy }) 
         {order.production_deadline_label || order.production_days ? <span>{order.production_deadline_label || `${order.production_days} dias úteis`}</span> : null}
       </div>
 
+      {order.quick_due_at && order.status === "em_producao" && <OrderCountdown
+        dueAt={order.quick_due_at} className="mt-2 block text-sm font-semibold" />}
       <button
         type="button"
         onClick={() => onAdvance(order)}
-        disabled={busy}
+        disabled={busy || disabled}
         className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-border px-2 py-1.5 text-xs transition hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
       >
         {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}

@@ -18,6 +18,7 @@ export const Route = createFileRoute("/_site/privacidade")({
           paragraphs: [
             "Coletamos os dados necessários para produzir e entregar seu pedido: nome, e-mail, telefone, CPF (quando exigido para nota fiscal) e endereço de entrega.",
             "As fotos e arquivos que você envia são usados exclusivamente para a produção do pedido.",
+            "Para mostrar estatísticas de acesso à loja, salvamos no seu navegador um identificador aleatório, sem usar seu nome, telefone ou fotos. Registramos páginas visitadas e atividade recente para contar navegadores únicos e atividade online. A retenção padrão é de 400 dias e pode ser ajustada pela loja até o limite de 730 dias; limpar os dados do navegador remove o identificador salvo no aparelho.",
           ],
         },
         {

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { fileSummary, uploadSiteImage } from "@/lib/admin-upload";
 
 /** Campo de foto do painel: prévia, formato, tamanho e erro de envio visíveis. */
-export default function AdminImageField({ value, onChange, hint }) {
+export default function AdminImageField({ value, onChange, hint, pixelSpec }) {
   const [uploading, setUploading] = useState(false);
 
   async function handleFile(event) {
@@ -55,6 +55,7 @@ export default function AdminImageField({ value, onChange, hint }) {
         </p>
       )}
       {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
+      {pixelSpec ? <p className="text-xs font-medium text-foreground">Tamanho recomendado: {pixelSpec}</p> : null}
     </div>
   );
 }

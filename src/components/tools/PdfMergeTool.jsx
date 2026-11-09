@@ -11,12 +11,13 @@ export default function PdfMergeTool() {
   const [busy, setBusy] = useState(false);
   const [merging, setMerging] = useState(false);
 
-  async function addFiles(files) {
-    if (!files?.length) return;
+  async function addFiles(selected) {
+    const files = Array.from(selected || []);
+    if (!files.length) return;
     setBusy(true);
     try {
       const { PDFDocument } = await import("pdf-lib");
-      for (const file of Array.from(files)) {
+      for (const file of files) {
         try {
           const document = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
           const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -31,6 +32,8 @@ export default function PdfMergeTool() {
           toast.error(`Não foi possível abrir ${file.name} — verifique se o PDF não está protegido.`);
         }
       }
+    } catch {
+      toast.error("Não foi possível carregar a ferramenta de PDF. Tente novamente.");
     } finally {
       setBusy(false);
     }
@@ -105,6 +108,7 @@ export default function PdfMergeTool() {
           type="file"
           accept="application/pdf,.pdf"
           multiple
+          disabled={busy || merging}
           className="hidden"
           onChange={(event) => {
             addFiles(event.target.files);
@@ -118,8 +122,8 @@ export default function PdfMergeTool() {
       <div className="mt-3 flex items-center justify-between gap-2">
         <p className="text-[11px] text-muted-foreground">{pages.length} página(s)</p>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={clearAll} disabled={!pages.length || merging}>Limpar</Button>
-          <Button size="sm" onClick={merge} disabled={!pages.length || merging}>
+          <Button size="sm" variant="outline" onClick={clearAll} disabled={!pages.length || busy || merging}>Limpar</Button>
+          <Button size="sm" onClick={merge} disabled={!pages.length || busy || merging}>
             {merging ? "Gerando…" : "Juntar e baixar"}
           </Button>
         </div>

@@ -5,7 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { Image } from "@/components/ui/image";
 import { Label } from "@/components/ui/label";
 
-export default function SiteImageField({ label, hint, value, fallback, onChange }) {
+export default function SiteImageField({ label, hint, pixelSpec, value, fallback, previewCrop, onChange }) {
   const [busy, setBusy] = useState(false);
   const shown = value || fallback || "";
 
@@ -53,7 +53,16 @@ export default function SiteImageField({ label, hint, value, fallback, onChange 
           ) : null}
         </div>
       </div>
+      {previewCrop && shown && <details className="text-xs">
+        <summary className="cursor-pointer">Comparar o corte no desktop e no celular</summary>
+        <div className="mt-2 flex flex-wrap items-start gap-3">
+          {[["Desktop","aspect-video w-60"],["Celular","aspect-[3/4] w-20"]].map(([name, size]) =>
+            <figure key={name}><Image src={shown} alt={`Corte estimado em ${name}`} className={`${size} rounded object-cover`} fittingType="cover" />
+              <figcaption className="mt-1">{name}</figcaption></figure>)}
+        </div>
+      </details>}
       {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
+      {pixelSpec ? <p className="text-xs font-medium text-foreground">Tamanho recomendado: {pixelSpec}</p> : null}
     </div>
   );
 }

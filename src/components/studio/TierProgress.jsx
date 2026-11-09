@@ -3,7 +3,7 @@ import { photoCategory } from "@/lib/quantity-pricing";
 
 // Mostra no próprio envio quanto falta para a próxima faixa de desconto — o
 // cálculo já existe no carrinho, mas o cliente precisa ver isso antes de fechar.
-export default function TierProgress({ area, lines = [], groups = [], tiers = [] }) {
+export default function TierProgress({ area, lines = [], groups = [], tiers = [], mixedCopies = 0 }) {
   const category = photoCategory(area);
   const categoryTiers = tiers.filter((tier) => (tier.category || "revelacao") === category);
   if (!categoryTiers.length) return null;
@@ -28,6 +28,7 @@ export default function TierProgress({ area, lines = [], groups = [], tiers = []
     const top = Object.values(counts).sort((a, b) => b - a)[0] || 0;
     count = top;
   }
+  if (mixedCopies) { count = mixedCopies; label = `${mixedCopies} cópias de revelação e polaroides`; }
   if (!count) return null;
 
   return (

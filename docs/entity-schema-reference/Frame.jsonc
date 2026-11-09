@@ -11,6 +11,9 @@
     "category": {
       "type": "string"
     },
+    "subcategory": {
+      "type": "string"
+    },
     "material": {
       "type": "string"
     },

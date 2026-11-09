@@ -12,7 +12,7 @@ const stateRoot = process.env.UPDATE_STATE_DIR || path.join(process.cwd(), "data
 
 async function currentVersion() {
   try { return (await readFile(path.join(stateRoot, "current-version"), "utf8")).trim(); }
-  catch { return process.env.APP_VERSION || "1.0.6"; }
+  catch { return process.env.APP_VERSION || "1.12.23"; }
 }
 
 function version(tag) {

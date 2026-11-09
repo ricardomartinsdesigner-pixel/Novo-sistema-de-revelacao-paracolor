@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { revelationOffer } from "@/lib/deadline";
 import { Clock, CreditCard, Lock, Store } from "lucide-react";
 import { useSettings } from "@/lib/store";
 import { useSiteContent } from "@/hooks/use-site-content";
@@ -8,6 +10,12 @@ const ICONS = [Clock, Store, CreditCard, Lock];
 export default function TrustBar() {
   const { settings } = useSettings();
   const { content } = useSiteContent();
+  const [now, setNow] = useState(null);
+  useEffect(() => {
+    setNow(new Date());
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
   const vars = {
     dias: Number(settings?.production_days) || 3,
     retencao: Number(settings?.retention_days) || 90,
@@ -15,7 +23,9 @@ export default function TrustBar() {
 
   const items = [1, 2, 3, 4].map((index) => ({
     icon: ICONS[index - 1],
-    title: fillVars(content[`home.trust${index}.title`], vars),
+    title: index === 1
+      ? settings && now ? revelationOffer(settings, now) : "Previsão de revelação"
+      : fillVars(content[`home.trust${index}.title`], vars),
     text: fillVars(content[`home.trust${index}.text`], vars),
   }));
 

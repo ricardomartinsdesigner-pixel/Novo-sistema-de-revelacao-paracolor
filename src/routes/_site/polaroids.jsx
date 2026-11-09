@@ -8,6 +8,7 @@ import PolaroidModelPreview from "@/components/polaroids/PolaroidModelPreview";
 import { formatDeadlineDuration } from "@/lib/deadline";
 import { formatBRL } from "@/lib/areas";
 import { useAreas, useSiteContent } from "@/hooks/use-site-content";
+import { publicPageEnabled } from "@/lib/public-pages";
 
 export const Route = createFileRoute("/_site/polaroids")({
   head: () => ({
@@ -35,9 +36,14 @@ function PolaroidsPage() {
             <p className="mt-4 max-w-lg text-sm leading-relaxed text-muted-foreground">
               {content["page.polaroids.text"]}
             </p>
-            <Button asChild size="lg" className="mt-7 rounded-full">
-              <Link to="/polaroids/criar">{content["page.polaroids.cta"]} <ArrowRight className="ml-1 h-4 w-4" /></Link>
-            </Button>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Button asChild size="lg" className="rounded-full">
+                <Link to="/polaroids/criar">{content["page.polaroids.cta"]} <ArrowRight className="ml-1 h-4 w-4" /></Link>
+              </Button>
+              {publicPageEnabled(settings, "page_simulador") && <Button asChild size="lg" variant="outline" className="rounded-full">
+                <Link to="/simulador">Calcular meu pedido</Link>
+              </Button>}
+            </div>
             <p className="mt-5 text-xs text-muted-foreground">
               Prazo de produção: <strong className="text-foreground">{formatDeadlineDuration(settings, "polaroid")}</strong> após a confirmação do pagamento
             </p>

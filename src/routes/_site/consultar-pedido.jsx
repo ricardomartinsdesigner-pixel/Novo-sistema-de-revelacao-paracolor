@@ -96,6 +96,7 @@ function ConsultarPedidoPage() {
             </span>
           </div>
 
+          <p className="mt-4 rounded-lg bg-accent px-3 py-2 text-sm"><strong>Próximo passo:</strong> {order.next_step}</p>
           <ul className="mt-4 space-y-2 text-sm">
             {order.items.map((item, index) => (
               <li key={`${item.product_name}-${index}`} className="flex justify-between gap-4 border-b border-border/60 pb-2 last:border-0">

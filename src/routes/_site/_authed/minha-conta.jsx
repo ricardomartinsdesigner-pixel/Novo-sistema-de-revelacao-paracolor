@@ -1,7 +1,10 @@
+import { nextOrderStep } from "@/lib/customer-order";
+import MyCoupons from "@/components/account/MyCoupons";
+import { listOrderPhotos } from "@/lib/photo-order";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Loader2, LogOut, RotateCcw } from "lucide-react";
+import { ExternalLink, Loader2, LogOut, RotateCcw, Star } from "lucide-react";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
@@ -12,14 +15,30 @@ import { STATUS_LABELS, formatBRL, formatDate } from "@/lib/areas";
 import { useEntityPage } from "@/lib/use-entity-page";
 import { isPhotoItem } from "@/lib/cart-items";
 import DeleteAccountCard from "@/components/account/DeleteAccountCard";
+import { useSettings } from "@/lib/store";
 
 export const Route = createFileRoute("/_site/_authed/minha-conta")({
   head: () => ({ meta: [{ title: "Minha conta — Paracolor" }] }),
   component: AccountPage,
 });
 
+function repeatWindowOpen(order, configuredDays, now = Date.now()) {
+  if (!["enviado", "retirado", "concluido"].includes(order?.status)) return true;
+  const days = Math.max(1, Math.min(730, Math.trunc(Number(configuredDays) || 90)));
+  const statusDates = (Array.isArray(order.status_history) ? order.status_history : [])
+    .filter((entry) => entry?.status === order.status && entry?.date)
+    .map((entry) => Date.parse(entry.date))
+    .filter(Number.isFinite);
+  const completedAt = statusDates.length
+    ? Math.max(...statusDates)
+    : Date.parse(order.updated_date || order.created_date || "");
+  if (!Number.isFinite(completedAt)) return false;
+  return now < completedAt + days * 86_400_000;
+}
+
 function AccountPage() {
   const { user, logout } = useAuth();
+  const { settings } = useSettings();
   const { addItems } = useCart();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -31,6 +50,16 @@ function AccountPage() {
   }, [user]);
 
   const { records: orders, isPending: isLoading, error: ordersError, hasNextPage, fetchNextPage, isFetchingNextPage } = useEntityPage("Order", { created_by_id: user.id });
+  const hasCompletedOrder = orders.some((order) => order.status === "concluido");
+  const googleReviewUrl = (() => {
+    try {
+      const url = new URL(settings?.google_review_url || "");
+      const host = url.hostname.toLowerCase();
+      return url.protocol === "https:" && (host === "google.com" || host.endsWith(".google.com") || host === "g.page" || host.endsWith(".g.page") || host === "maps.app.goo.gl") ? url.toString() : "";
+    } catch {
+      return "";
+    }
+  })();
   const { data: pendingApproval = 0 } = useQuery({
     queryKey: ["Order", "pending-art", user.id],
     queryFn: () => base44.entities.Order.count({ created_by_id: user.id, art_approval_requested: true, art_approval_status: "aguardando" }),
@@ -52,7 +81,7 @@ function AccountPage() {
 
   async function repeat(order) {
     const items = (await base44.entities.OrderItem.filter({ order_id: order.id }, { limit: 100 })).items ?? [];
-    const photos = (await base44.entities.OrderPhoto.filter({ order_id: order.id }, { limit: 500 })).items ?? [];
+    const photos = await listOrderPhotos(base44.entities, order.id);
     const cartItems = items.map((item) => {
       const itemPhotos = photos
         .filter((photo) => photo.item_id === item.id)
@@ -65,6 +94,7 @@ function AccountPage() {
           width_cm: photo.width_cm,
           height_cm: photo.height_cm,
           fit_mode: photo.fit_mode,
+          color_effect: photo.color_effect,
           border: photo.border,
           zoom: photo.zoom,
           offset_x: photo.offset_x,
@@ -76,6 +106,8 @@ function AccountPage() {
           alerts: photo.alerts,
           caption: photo.caption,
           caption_style: photo.caption_style,
+          captionAreaEnabled: photo.caption_area_enabled !== false,
+          caption_area_enabled: photo.caption_area_enabled !== false,
           polaroid_model: photo.polaroid_model,
           copies: photo.copies,
           confirmed_issue: photo.confirmed_issue,
@@ -92,7 +124,7 @@ function AccountPage() {
         options: item.options || {},
       };
     });
-    addItems(cartItems);
+    if (!addItems(cartItems)) return;
     toast.success("Itens adicionados ao carrinho");
     navigate({ to: "/carrinho" });
   }
@@ -144,13 +176,16 @@ function AccountPage() {
                       <p className="text-[11px] text-muted-foreground">pagamento {order.payment_status}</p>
                     </div>
                   </div>
+                  <p className="mt-3 text-xs font-medium text-primary">{nextOrderStep(order)}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button asChild size="sm" variant="outline">
                       <Link to="/pedido/$orderId" params={{ orderId: order.id }}>Ver detalhes</Link>
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => repeat(order)} className="gap-1.5">
-                      <RotateCcw className="h-3.5 w-3.5" /> Repetir pedido
-                    </Button>
+                    {repeatWindowOpen(order, settings?.retention_days) ? (
+                      <Button size="sm" variant="ghost" onClick={() => repeat(order)} className="gap-1.5">
+                        <RotateCcw className="h-3.5 w-3.5" /> Repetir pedido
+                      </Button>
+                    ) : null}
                   </div>
                 </li>
               ))}
@@ -189,6 +224,23 @@ function AccountPage() {
           </p>
           </div>
 
+          {hasCompletedOrder && googleReviewUrl ? (
+            <section className="rounded-[1.25rem] border border-gold/40 bg-card p-6 shadow-sm" aria-labelledby="google-review-title">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold/15 text-gold-foreground"><Star className="h-5 w-5" aria-hidden="true" /></span>
+                <div>
+                  <h2 id="google-review-title" className="text-lg">Conte como foi sua experiência</h2>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Seu pedido foi concluído. Se quiser, conte no Google como foi sua experiência com a Paracolor. Sua avaliação é opcional.</p>
+                  <Button asChild className="mt-4 rounded-full">
+                    <a href={googleReviewUrl} target="_blank" rel="noopener noreferrer">
+                      Avaliar a Paracolor no Google <ExternalLink className="ml-2 h-4 w-4" aria-hidden="true" />
+                    </a>
+                  </Button>
+                </div>
+              </div>
+            </section>
+          ) : null}
+          <MyCoupons userId={user.id} />
           <DeleteAccountCard user={user} />
         </aside>
       </div>

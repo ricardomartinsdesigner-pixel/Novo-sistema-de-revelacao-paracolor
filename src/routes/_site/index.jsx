@@ -31,22 +31,22 @@ function HomePage() {
   return (
     <>
       <Hero />
-      <StudioPromo />
       <TrustBar />
+      <HowItWorks />
+      <Advantages />
+      <AreasGrid />
       <div className="container-x">
         <PromoCarousel placement="home" />
       </div>
-      <AreasGrid />
       <QuantityPricing />
       <Featured />
       <Gallery />
-      <HowItWorks />
-      <Advantages />
       <Testimonials />
+      <StudioPromo />
+      <HomeCta />
       <div id="duvidas">
         <Faq />
       </div>
-      <HomeCta />
     </>
   );
 }

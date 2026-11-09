@@ -1,8 +1,13 @@
+import { canAccessOrder, verifyOrderDownload } from "@/lib/order-download.server";
 import { createFileRoute } from "@tanstack/react-router";
-import { buildZip } from "@/lib/zip.server";
-import { orderLabel, pad, photoFolder, photoPrefix, sizeLabel } from "@/lib/order-paths";
+import { Readable } from "node:stream";
+import yazl from "yazl";
+import { listOrderPhotos } from "@/lib/photo-order";
+import { orderProductEntries } from "@/lib/order-product-archive";
+import { orderArchiveFiles } from "@/lib/vps/files.server";
+import { orderLabel, photoFolder, photoPrefix, sizeLabel } from "@/lib/order-paths";
 
-const AREAS = ["revelacao", "polaroid", "banner", "personalizado", "moldura"];
+const AREAS = ["revelacao", "polaroid", "magnet", "banner", "personalizado", "moldura"];
 
 function slug(value) {
   return String(value || "")
@@ -10,12 +15,6 @@ function slug(value) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z0-9_-]+/g, "_")
     .toUpperCase();
-}
-
-async function fetchBytes(url) {
-  const response = await fetch(url);
-  if (!response.ok) return null;
-  return new Uint8Array(await response.arrayBuffer());
 }
 
 function resolveFilter(only) {
@@ -37,6 +36,10 @@ export const Route = createFileRoute("/api/order-zip")({
         const size = url.searchParams.get("size") || "";
         if (!orderId || !token) return new Response("Link inválido", { status: 400 });
 
+        if (!verifyOrderDownload(context.user, orderId, only, size, url.searchParams.get("expires"), token)) {
+          return new Response("Link inválido ou expirado. Gere outro no pedido.", { status: 403 });
+        }
+
         const role = context.getBase44().asServiceRole;
         let order;
         try {
@@ -45,71 +48,59 @@ export const Route = createFileRoute("/api/order-zip")({
           return new Response("Pedido não encontrado", { status: 404 });
         }
 
-        const valid =
-          order.download_token &&
-          order.download_token === token &&
-          order.download_token_expires &&
-          new Date(order.download_token_expires).getTime() > Date.now();
-        if (!valid) return new Response("Link expirado. Gere novamente no painel.", { status: 403 });
+        if (!canAccessOrder(context.user, order)) return new Response("Sem acesso ao pedido.", { status: 403 });
 
-        const items = (await role.entities.OrderItem.filter({ order_id: orderId }, { limit: 100 })).items ?? [];
-        let photos = (await role.entities.OrderPhoto.filter({ order_id: orderId }, { limit: 500 })).items ?? [];
-
+        const [items, allPhotos] = await Promise.all([
+          role.entities.OrderItem.filter({ order_id: orderId }, { sort: "created_date", limit: 100 }).then((result) => result.items ?? []),
+          listOrderPhotos(role.entities, orderId),
+        ]);
         const filter = resolveFilter(size ? "impressao" : only);
-        if (size) photos = photos.filter((photo) => sizeLabel(photo) === size);
-        if (filter.areas) photos = photos.filter((photo) => filter.areas.includes(photo.area));
+        const digits = allPhotos.length >= 1000 ? 4 : 3;
+        const photos = allPhotos.map((photo, index) => ({
+          photo, position: String(index + 1).padStart(digits, "0"),
+        })).filter(({ photo }) =>
+          (!size || sizeLabel(photo) === size) && (!filter.areas || filter.areas.includes(photo.area))
+        );
 
         const root = slug(orderLabel(order) || `PEDIDO_${order.id}`);
-        const files = [];
-
-        const originalPhotos = filter.originals ? photos.filter((photo) => photo.original_file_uri) : [];
-        const counters = new Map();
-        const printPlan = (filter.prints ? photos.filter((photo) => photo.print_file_uri) : []).map((photo) => {
-          const folder = photoFolder(photo);
-          const next = (counters.get(folder) || 0) + 1;
-          counters.set(folder, next);
-          const ext = /\.pdf$/i.test(photo.print_name || "") ? "pdf" : "jpg";
-          return { photo, folder, fileName: `${root}_${photoPrefix(photo)}_${pad(next)}.${ext}` };
-        });
-
-        for (let index = 0; index < originalPhotos.length; index += 1) {
-          const photo = originalPhotos[index];
-          const signed = await role.integrations.Core.CreateFileSignedUrl({ file_uri: photo.original_file_uri });
-          const bytes = await fetchBytes(signed.signed_url);
-          if (!bytes) {
-            return new Response(`Não foi possível incluir o original ${photo.filename || ""}. Tente novamente.`, {
-              status: 502,
-            });
+        const entries = [];
+        for (const { photo, position } of photos) {
+          if (photo.area === "personalizado") continue;
+          if (filter.originals && photo.original_file_uri) {
+            entries.push({ uri: photo.original_file_uri, name: `${root}/Fotos_Originais/${root}_ORIGINAL_${position}`, fallback: "jpg" });
           }
-          const ext = (photo.original_file_uri.split(".").pop() || "jpg").split("?")[0].slice(0, 5);
-          files.push({ name: `${root}/Fotos_Originais/${root}_ORIGINAL_${pad(index + 1)}.${ext}`, data: bytes });
-        }
-
-        for (const entry of printPlan) {
-          const signed = await role.integrations.Core.CreateFileSignedUrl({ file_uri: entry.photo.print_file_uri });
-          const bytes = await fetchBytes(signed.signed_url);
-          if (!bytes) {
-            return new Response(`Não foi possível incluir a foto ${entry.photo.filename || entry.fileName}. Tente novamente.`, {
-              status: 502,
-            });
+          if (filter.prints && photo.print_file_uri) {
+            entries.push({ uri: photo.print_file_uri, name: `${root}/${photoFolder(photo)}/${root}_${photoPrefix(photo)}_${position}`, fallback: /\.pdf$/i.test(photo.print_name || "") ? "pdf" : "jpg" });
           }
-          files.push({ name: `${root}/${entry.folder}/${entry.fileName}`, data: bytes });
         }
-
-        const includeArt = (filter.originals || filter.prints) && !size;
-        for (const [index, item] of items.entries()) {
-          const options = item.options || {};
-          if (options.art_file_uri && includeArt) {
-            const signed = await role.integrations.Core.CreateFileSignedUrl({ file_uri: options.art_file_uri });
-            const bytes = await fetchBytes(signed.signed_url);
-            if (!bytes) return new Response("Não foi possível incluir a arte. Tente novamente.", { status: 502 });
-            const extension = (options.art_original_name || "arte.jpg").split(".").pop().replace(/[^a-zA-Z0-9]/g, "").slice(0, 6) || "jpg";
-            files.push({ name: `${root}/Banners/ITEM_${index + 1}_ARTE.${extension}`, data: bytes });
+        if (!size) {
+          for (const entry of orderProductEntries(items, photos, filter)) {
+            entries.push({ ...entry, name: `${root}/${entry.name}` });
           }
         }
 
-        const zip = buildZip(files);
-        return new Response(zip, {
+        let files;
+        try {
+          files = await orderArchiveFiles(entries.flatMap((entry) => entry.uri ? [entry.uri] : []), order.created_by_id);
+        } catch (error) {
+          if (error.status === 403) return new Response("O pedido contém arquivos não autorizados ou indisponíveis.", { status: 403 });
+          return new Response("Há arquivos indisponíveis neste pedido. Confira os arquivos e tente novamente.", { status: 502 });
+        }
+        const zip = new yazl.ZipFile();
+        zip.on("error", (error) => zip.outputStream.destroy(error));
+        for (const entry of entries) {
+          if (entry.uri) {
+            const file = files.get(entry.uri);
+            zip.addFile(file.filename, `${entry.name}.${file.extension || entry.fallback}`, { compress: false });
+          } else if (entry.text !== undefined) {
+            zip.addBuffer(Buffer.from(entry.text, "utf8"), entry.name);
+          } else {
+            zip.addEmptyDirectory(entry.name);
+          }
+        }
+        const stream = Readable.toWeb(zip.outputStream);
+        zip.end();
+        return new Response(stream, {
           headers: {
             "content-type": "application/zip",
             "content-disposition": `attachment; filename="${root}.zip"`,

@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNewOrders } from "@/hooks/use-new-orders";
+import { hasStaffAccess } from "@/lib/staff-access";
 
 const GROUPS = [
   {
@@ -69,8 +70,9 @@ const GROUPS = [
   },
 ];
 
-export default function AdminNav({ pathname, onNavigate }) {
-  const { total: newOrders } = useNewOrders();
+export default function AdminNav({ pathname, onNavigate, user }) {
+  const canSeeOrders = hasStaffAccess(user, "orders");
+  const { unread: { total: newOrders } } = useNewOrders({ enabled: canSeeOrders });
 
   return (
     <nav className="space-y-5">
@@ -80,7 +82,7 @@ export default function AdminNav({ pathname, onNavigate }) {
             {group.label}
           </p>
           <div className="space-y-0.5">
-            {group.links.map((link) => {
+            {group.links.filter((link) => hasStaffAccess(user, ({ "/admin": "overview", "/admin/relatorios": "reports", "/admin/pedidos": "orders", "/admin/producao": "production", "/admin/entregas": "deliveries", "/admin/pagamentos": "payments", "/admin/clientes": "clients" })[link.to] || "admin")).map((link) => {
               const active =
                 link.to === "/admin"
                   ? pathname === "/admin"
@@ -102,7 +104,7 @@ export default function AdminNav({ pathname, onNavigate }) {
                   {link.to === "/admin/pedidos" && newOrders > 0 ? (
                     <span
                       className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold leading-none text-destructive-foreground"
-                      aria-label={`${newOrders} pedidos novos`}
+                      aria-label={`${newOrders} pedidos novos não visualizados`}
                     >
                       {newOrders > 99 ? "99+" : newOrders}
                     </span>

@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireUser } from "@/lib/auth-middleware";
 import { loadIntegrationConfig } from "@/lib/integrations.server";
 import { publicSmtpConfig, smtpInput } from "@/lib/smtp-config.server";
@@ -33,5 +34,21 @@ export const saveSmtpSettings = createServerFn({ method: "POST" })
     const saved = config
       ? await base44.asServiceRole.entities.IntegrationConfig.update(config.id, patch)
       : await base44.asServiceRole.entities.IntegrationConfig.create(patch);
+    return publicSmtpConfig(saved);
+  });
+
+export const setSmtpEnabled = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(z.object({ enabled: z.boolean() }))
+  .handler(async ({ data, context }) => {
+    adminOnly(context);
+    const base44 = context.getBase44();
+    const config = await loadIntegrationConfig(base44);
+    if (data.enabled && (!config?.smtp_host || !config?.smtp_username || !config?.smtp_password || !config?.smtp_from_email)) {
+      throw new Error("Salve primeiro os dados completos do servidor SMTP para ativá-lo.");
+    }
+    const saved = config
+      ? await base44.asServiceRole.entities.IntegrationConfig.update(config.id, { smtp_enabled: data.enabled })
+      : await base44.asServiceRole.entities.IntegrationConfig.create({ smtp_enabled: false });
     return publicSmtpConfig(saved);
   });

@@ -9,7 +9,8 @@
       "type": "string",
       "enum": [
         "revelacao",
-        "polaroid"
+        "polaroid",
+        "magnet"
       ],
       "enumColors": [
         "blue",

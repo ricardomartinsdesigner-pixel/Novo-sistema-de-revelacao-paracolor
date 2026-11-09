@@ -1,8 +1,10 @@
+import { needsArtApproval } from "@/lib/order-production";
 import { useState } from "react";
 import { CalendarClock, Clock, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { setOrderDeadline, startQuickProduction } from "@/lib/store-fns";
+import { canProduceOrder } from "@/lib/order-payment";
+import { setOrderDeadline, startQuickProduction, updateOrderStatus } from "@/lib/store-fns";
 import { formatDate } from "@/lib/areas";
 import OrderCountdown from "@/components/orders/OrderCountdown";
 
@@ -16,6 +18,8 @@ const QUICK = [
 export default function OrderDeadlinePanel({ order, onDone }) {
   const [busy, setBusy] = useState("");
   const [custom, setCustom] = useState("");
+  const unavailable = ["aguardando_conferencia", "pronto", "retirado", "enviado", "concluido", "cancelado"].includes(order.status)
+    || !canProduceOrder(order) || needsArtApproval(order);
 
   async function run(key, task, message) {
     setBusy(key);
@@ -24,7 +28,7 @@ export default function OrderDeadlinePanel({ order, onDone }) {
       toast.success(message);
       await onDone();
     } catch (error) {
-      toast.error(error?.message || "Não foi possível salvar o prazo.");
+      toast.error(error?.message || "Não foi possível aplicar a ação.");
     } finally {
       setBusy("");
     }
@@ -41,10 +45,9 @@ export default function OrderDeadlinePanel({ order, onDone }) {
 
   return (
     <section className="card-glass p-5">
-      <h2 className="text-lg">Prazo de entrega</h2>
+      <h2 className="text-lg">Atalhos de produção</h2>
       <p className="mt-1 text-[11px] text-muted-foreground">
-        Defina o prazo do pedido. Ele aparece como contagem regressiva para o cliente e, quando o tempo acabar, o pedido é
-        marcado como pronto automaticamente na fila de produção.
+        Inicie a produção ou defina um prazo que o cliente pode acompanhar. A equipe confirma quando o pedido fica pronto.
       </p>
 
       {order.quick_due_at ? (
@@ -60,13 +63,17 @@ export default function OrderDeadlinePanel({ order, onDone }) {
       ) : null}
 
       <div className="mt-3 grid gap-2">
+        <Button type="button" size="sm" disabled={Boolean(busy) || unavailable || order.status === "em_producao"}
+          onClick={() => run("start", () => updateOrderStatus({ data: { order_id: order.id, status: "em_producao" } }), "Pedido em produção")}>
+          {busy === "start" && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Em produção
+        </Button>
         {QUICK.map((action) => (
           <Button
             key={action.preset}
             size="sm"
             variant="outline"
             onClick={() => run(action.preset, () => startQuickProduction({ data: { order_id: order.id, preset: action.preset } }), "Pedido em produção com prazo definido")}
-            disabled={Boolean(busy)}
+            disabled={Boolean(busy) || unavailable}
             className="justify-between gap-2"
           >
             <span className="flex items-center gap-1.5">
@@ -86,11 +93,12 @@ export default function OrderDeadlinePanel({ order, onDone }) {
           <input
             id="deadline"
             type="datetime-local"
+            disabled={unavailable}
             value={custom}
             onChange={(event) => setCustom(event.target.value)}
             className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm"
           />
-          <Button size="sm" onClick={applyCustom} disabled={Boolean(busy)} className="gap-1.5">
+          <Button size="sm" onClick={applyCustom} disabled={Boolean(busy) || unavailable} className="gap-1.5">
             {busy === "custom" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarClock className="h-3.5 w-3.5" />}
             Aplicar prazo
           </Button>

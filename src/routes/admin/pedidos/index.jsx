@@ -1,34 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Download, Eye, Search } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
+import OrderCustomerBadges from "@/components/admin/OrderCustomerBadges";
 import { STATUS_LABELS, STATUS_FLOW, formatBRL, formatDate } from "@/lib/areas";
-import { settleQuickDeadlines } from "@/lib/store-fns";
-import { useEntityPage } from "@/lib/use-entity-page";
-
-// Pedidos que ainda não entraram em produção: é aqui que o time dá início.
-export const PRE_PRODUCTION = [
-  "aguardando_pagamento",
-  "pagamento_aprovado",
-  "aguardando_arte",
-  "aguardando_aprovacao",
-  "ajustes_solicitados",
-  "arte_aprovada",
-];
-
-const TAB_QUERIES = {
-  iniciar: { status: { $in: PRE_PRODUCTION } },
-  andamento: { status: { $nin: ["concluido"] } },
-  concluidos: { status: "concluido" },
-};
-
-const TABS = [
-  { key: "iniciar", label: "Para iniciar" },
-  { key: "andamento", label: "Em andamento" },
-  { key: "concluidos", label: "Concluídos" },
-];
+import { getAdminOrders, getAdminOrderTabCounts } from "@/lib/admin-operations-fns";
+import { ORDER_TABS, prioritizeDeadline } from "@/lib/admin-order-filters";
+import { toast } from "sonner";
+import { toArray } from "@/lib/collection-utils";
 
 export const Route = createFileRoute("/admin/pedidos/")({
   head: () => ({ meta: [{ title: "Pedidos — Paracolor" }] }),
@@ -37,72 +18,61 @@ export const Route = createFileRoute("/admin/pedidos/")({
 
 function OrdersPage() {
   const [search, setSearch] = useState("");
-  const [view, setView] = useState("andamento");
+  const [view, setView] = useState("iniciar");
   const [status, setStatus] = useState("todos");
   const [payment, setPayment] = useState("todos");
+  const [exporting, setExporting] = useState(false);
+  const queryClient = useQueryClient();
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => { const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350); return () => clearTimeout(timer); }, [search]);
-  const query = useMemo(() => {
-    const next = {};
-    // Buscando por cliente (nome ou CPF), todos os pedidos dele aparecem — inclusive os concluídos.
-    if (status !== "todos") next.status = status;
-    else if (!debouncedSearch) next.status = TAB_QUERIES[view].status;
-    if (payment !== "todos") next.payment_status = payment;
-    if (debouncedSearch) {
-      const escaped = debouncedSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      next.$or = ["order_number", "internal_number", "customer_name", "customer_email", "customer_cpf"].map((field) => ({
-        [field]: { $regex: escaped, $options: "i" },
-      }));
-      // CPF digitado com ou sem pontuação: compara só os números.
-      const digits = debouncedSearch.replace(/\D/g, "");
-      if (digits.length >= 3 && /^[\d.\-\s]+$/.test(debouncedSearch)) {
-        next.$or.push({ customer_cpf: { $regex: digits.split("").join("[.\\-\\s]?"), $options: "i" } });
-      }
-    }
-    return next;
-  }, [view, status, payment, debouncedSearch]);
-  const { records: filtered, isPending, error, hasNextPage, isFetchingNextPage, fetchNextPage, refetch } = useEntityPage("Order", query);
-  const { data: total = 0 } = useQuery({ queryKey: ["Order", "count", query], queryFn: () => base44.entities.Order.count(query) });
+  const filters = useMemo(() => ({ view, status, payment, search: debouncedSearch }), [view, status, payment, debouncedSearch]);
+  const showDeadline = prioritizeDeadline(filters);
+  const { data, isPending, error, hasNextPage, isFetchingNextPage, fetchNextPage, refetch } = useInfiniteQuery({
+    queryKey: ["Order", "admin-pages", filters],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => getAdminOrders({ data: { filters, offset: pageParam } }),
+    getNextPageParam: (page) => page.nextOffset ?? undefined,
+    staleTime: 30_000,
+  });
+  const filtered = data?.pages.flatMap((page) => page.items) ?? [];
+  const total = data?.pages[0]?.total ?? 0;
+  useEffect(() => base44.entities.Order.subscribe(() => queryClient.invalidateQueries({ queryKey: ["Order"] })), [queryClient]);
+  const profileIds = [...new Set(filtered
+    .filter((order) => order.customer_professional !== true)
+    .map((order) => order.customer_user_id)
+    .filter(Boolean))].sort();
+  const { data: professionalIds = [] } = useQuery({
+    queryKey: ["admin-users", "order-professionals", profileIds],
+    enabled: profileIds.length > 0,
+    queryFn: async () => toArray(await base44.entities.User.filter({
+      id: { $in: profileIds }, professional_pricing: true,
+    }, { limit: profileIds.length })).map((profile) => profile.id),
+  });
+  const currentProfessionals = new Set(professionalIds);
   const { data: tabCounts = {} } = useQuery({
     queryKey: ["Order", "tab-counts"],
-    queryFn: async () => {
-      const entries = await Promise.all(
-        Object.entries(TAB_QUERIES).map(async ([key, filters]) => [key, await base44.entities.Order.count(filters)])
-      );
-      return Object.fromEntries(entries);
-    },
+    queryFn: () => getAdminOrderTabCounts(),
   });
 
-  // Prazos rápidos vencidos viram "concluído" e saem da lista em andamento.
-  useEffect(() => {
-    let active = true;
-    settleQuickDeadlines()
-      .then((result) => { if (active && result?.settled) refetch(); })
-      .catch(() => null);
-    return () => { active = false; };
-  }, []);
-
-  function exportCsv() {
-    const header = ["Pedido site", "Número interno", "Data", "Cliente", "Email", "Status", "Pagamento", "Total"];
-    const rows = filtered.map((order) => [
-      order.order_number,
-      order.internal_number || "",
-      new Date(order.created_date).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
-      order.customer_name,
-      order.customer_email,
-      STATUS_LABELS[order.status] || order.status,
-      order.payment_status,
-      String(order.total).replace(".", ","),
-    ]);
-    const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(";")).join("\n");
-    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `pedidos_paracolor_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      const response = await fetch("/api/admin/orders-export", {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(filters),
+      });
+      if (!response.ok) throw new Error("Não foi possível exportar os pedidos.");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = response.headers.get("content-disposition")?.match(/filename="([^"]+)"/)?.[1] || "pedidos_paracolor.csv";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      toast.error("Não foi possível exportar os pedidos. Tente novamente.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -113,32 +83,33 @@ function OrdersPage() {
           <h1 className="mt-1 text-3xl">Pedidos</h1>
           <p className="mt-1 text-xs text-muted-foreground">{filtered.length} carregados · {total} pedidos encontrados</p>
         </div>
-        <Button variant="outline" size="sm" onClick={exportCsv} className="gap-1.5">
-          <Download className="h-3.5 w-3.5" /> Exportar pedidos exibidos
+        <Button variant="outline" size="sm" onClick={exportCsv} disabled={exporting || isPending || search.trim() !== debouncedSearch} className="gap-1.5">
+          <Download className="h-3.5 w-3.5" /> {exporting ? "Exportando…" : "Exportar pedidos filtrados"}
         </Button>
       </div>
 
       <div className={`mt-5 flex-wrap items-center gap-1 rounded-lg border border-border p-1 text-xs ${debouncedSearch ? "hidden" : "inline-flex"}`}>
-        {TABS.map((tab) => (
+        {Object.entries(ORDER_TABS).map(([key, tab]) => (
           <button
-            key={tab.key}
-            onClick={() => { setView(tab.key); setStatus("todos"); }}
+            key={key}
+            onClick={() => { setView(key); setStatus("todos"); }}
+            aria-pressed={view === key}
             className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-medium transition-colors ${
-              view === tab.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary"
+              view === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary"
             }`}
           >
             {tab.label}
-            {tabCounts[tab.key] ? (
+            {tabCounts[key] ? (
               <span
                 className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${
-                  tab.key === "iniciar"
+                  key === "iniciar"
                     ? "bg-destructive text-destructive-foreground"
-                    : view === tab.key
+                    : view === key
                       ? "bg-primary-foreground/20"
                       : "bg-secondary text-muted-foreground"
                 }`}
               >
-                {tabCounts[tab.key]}
+                {tabCounts[key]}
               </span>
             ) : null}
           </button>
@@ -148,19 +119,24 @@ function OrdersPage() {
       {debouncedSearch ? (
         <p className="mt-3 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <Search className="h-3.5 w-3.5" />
-          Buscando em todos os pedidos por nome, CPF, e-mail ou número — inclusive os concluídos.
+          Buscando em todos os pedidos por nome, telefone, CPF, e-mail ou número — inclusive os concluídos.
         </p>
       ) : view === "iniciar" ? (
         <p className="mt-2 text-[11px] text-muted-foreground">
           Pedidos que ainda não entraram em produção — abra o pedido e use “Liberar para produção”.
+        </p>
+      ) : showDeadline ? (
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Pedidos em produção ou conferência, com os prazos definidos mais próximos primeiro.
         </p>
       ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <input
           value={search}
+          maxLength={160}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Buscar por nome do cliente, CPF ou número do pedido"
+          placeholder="Buscar por nome, telefone, CPF, e-mail ou número do pedido"
           className="min-w-[220px] flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm"
         />
         <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-lg border border-input bg-background px-3 py-2 text-sm">
@@ -174,6 +150,8 @@ function OrdersPage() {
           <option value="pendente">Pendente</option>
           <option value="aprovado">Aprovado</option>
           <option value="recusado">Recusado</option>
+          <option value="reembolsado">Reembolsado</option>
+          <option value="teste_aprovado">Teste aprovado</option>
         </select>
       </div>
 
@@ -201,15 +179,32 @@ function OrdersPage() {
                   {order.internal_number ? (
                     <span className="block text-[11px] text-muted-foreground">interna: {order.internal_number}</span>
                   ) : null}
+                  {order.has_order_alert ? (() => {
+                    const viewers = Array.isArray(order.alert_viewers) ? order.alert_viewers : [];
+                    const viewedAt = order.alert_viewed_at
+                      ? new Date(order.alert_viewed_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })
+                      : "";
+                    const label = viewedAt
+                      ? `Visualizado por você · ${viewedAt}`
+                      : viewers.length
+                        ? `Você ainda não abriu · visto por ${viewers.map((viewer) => viewer.name).filter(Boolean).join(", ")}`
+                        : order.alert_is_legacy
+                          ? "Alerta anterior à atualização · abra para registrar a visualização"
+                          : "Novo · não visualizado";
+                    return <span className={`mt-1 block text-[10px] font-medium ${viewedAt ? "text-muted-foreground" : "text-destructive"}`}>{label}</span>;
+                  })() : null}
                 </td>
                 <td className="px-3 py-2">
                   {order.customer_name}
+                  <OrderCustomerBadges order={order} profileProfessional={currentProfessionals.has(order.customer_user_id)} />
                   <span className="block text-[11px] text-muted-foreground">{order.customer_email}</span>
                   {order.customer_cpf ? (
                     <span className="block text-[11px] text-muted-foreground">CPF {order.customer_cpf}</span>
                   ) : null}
                 </td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">{formatDate(order.created_date)}</td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">{formatDate(order.created_date)}
+                  {showDeadline && order.quick_due_at && <span className="block font-medium text-foreground">Prazo {formatDate(order.quick_due_at)}</span>}
+                </td>
                 <td className="px-3 py-2 text-xs">{STATUS_LABELS[order.status] || order.status}</td>
                 <td className="px-3 py-2 text-xs">{order.payment_status}</td>
                 <td className="px-3 py-2 text-xs">{order.last_action_by || "—"}</td>

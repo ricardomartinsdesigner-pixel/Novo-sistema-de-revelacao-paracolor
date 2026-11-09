@@ -14,12 +14,14 @@ export const smtpInput = z.object({
 
 export function publicSmtpConfig(config) {
   return {
+    enabled: Boolean(config?.smtp_host && config?.smtp_password && config?.smtp_from_email && config?.smtp_enabled !== false),
     host: config?.smtp_host || "",
     port: config?.smtp_port || 465,
     security: config?.smtp_security || "tls",
     username: config?.smtp_username || "",
     from_email: config?.smtp_from_email || "",
     has_password: Boolean(config?.smtp_password),
+    last_test: config?.smtp_last_test ?? null,
   };
 }
 
@@ -33,6 +35,12 @@ export class SmtpNotConfiguredError extends Error {
 
 export async function loadSmtpConfig(base44) {
   const stored = await loadIntegrationConfig(base44);
+  if (stored?.smtp_enabled === false) {
+    const error = new Error("O serviço SMTP está desativado nas configurações administrativas.");
+    error.name = "SmtpDisabledError";
+    error.code = "SMTP_DISABLED";
+    throw error;
+  }
   const hasAnySmtpSetting = Boolean(
     stored?.smtp_host || stored?.smtp_username || stored?.smtp_password || stored?.smtp_from_email
   );

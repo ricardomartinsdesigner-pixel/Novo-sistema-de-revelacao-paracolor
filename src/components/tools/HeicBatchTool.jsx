@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, Loader2, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -27,15 +27,28 @@ async function toJpeg(file) {
 
 export default function HeicBatchTool() {
   const files = useRef(new Map());
+  const urls = useRef(new Map());
+  const active = useRef(false);
   const [items, setItems] = useState([]);
   const [running, setRunning] = useState(false);
   const [processed, setProcessed] = useState(0);
+
+  function clearFiles() {
+    files.current.clear();
+    urls.current.forEach((url) => URL.revokeObjectURL(url));
+    urls.current.clear();
+  }
+
+  useEffect(() => {
+    active.current = true;
+    return () => { active.current = false; clearFiles(); };
+  }, []);
 
   function selectFiles(selected) {
     const list = Array.from(selected || []);
     if (list.length > MAX_FILES) toast(`Selecionamos as primeiras ${MAX_FILES} fotos do lote.`);
     const accepted = list.slice(0, MAX_FILES);
-    files.current.clear();
+    clearFiles();
     setProcessed(0);
     setItems(
       accepted.map((file) => {
@@ -54,9 +67,14 @@ export default function HeicBatchTool() {
       for (const [index, item] of items.entries()) {
         try {
           const { blob, name } = await toJpeg(files.current.get(item.key));
+          if (!active.current) return;
+          const previous = urls.current.get(item.key);
+          if (previous) URL.revokeObjectURL(previous);
           const url = URL.createObjectURL(blob);
+          urls.current.set(item.key, url);
           setItems((current) => current.map((row) => (row.key === item.key ? { ...row, status: "done", url, name } : row)));
         } catch {
+          if (!active.current) return;
           setItems((current) => current.map((row) => (row.key === item.key ? { ...row, status: "error" } : row)));
         }
         setProcessed(index + 1);
@@ -97,6 +115,7 @@ export default function HeicBatchTool() {
           type="file"
           accept="image/*,.heic,.heif"
           multiple
+          disabled={running}
           className="hidden"
           onChange={(event) => {
             selectFiles(event.target.files);
@@ -138,7 +157,7 @@ export default function HeicBatchTool() {
       ) : null}
 
       <div className="mt-3 flex justify-end gap-2">
-        <Button size="sm" variant="outline" onClick={() => setItems([])} disabled={!items.length || running}>Limpar</Button>
+        <Button size="sm" variant="outline" onClick={() => { clearFiles(); setItems([]); }} disabled={!items.length || running}>Limpar</Button>
         {ready ? (
           <Button size="sm" variant="outline" onClick={downloadAll} className="gap-1.5">
             <Download className="h-3.5 w-3.5" /> Baixar as {ready}

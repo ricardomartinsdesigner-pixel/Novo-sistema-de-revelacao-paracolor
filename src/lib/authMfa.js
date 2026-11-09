@@ -1,7 +1,7 @@
 import { base44 } from "@/api/base44Client";
 
-export async function loginWithMfa(email, password) {
-  return base44.auth.login({ email, password });
+export async function loginWithMfa(email, password, otp) {
+  return base44.auth.login({ email, password, otp });
 }
 
 export async function continueMfa() {

@@ -8,9 +8,11 @@ import { useAreas, useSiteContent } from "@/hooks/use-site-content";
 import { Image } from "@/components/ui/image";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import ThemeToggle from "@/components/site/ThemeToggle";
+import { publicPageEnabled } from "@/lib/public-pages";
 
-function CartLink() {
+function CartLink({ enabled }) {
   const { count } = useCart();
+  if (!enabled) return null;
   return (
     <Link
       to="/carrinho"
@@ -34,9 +36,10 @@ export default function SiteHeader() {
   const { content } = useSiteContent();
   const allAreas = useAreas();
   const areas = allAreas.filter((area) => moduleEnabled(settings, area.key));
-  const logo = content["brand.logo"] || settings?.logo_url;
+  const logo = "/brand/paracolor-logo.png";
   const storeName = settings?.store_name || "Paracolor";
-  const tagline = content["brand.tagline"];
+  const accountEnabled = publicPageEnabled(settings, "page_minha_conta");
+  const cartEnabled = publicPageEnabled(settings, "page_carrinho");
 
   const navLinks = [
     ...areas.map((area) => ({ key: area.key, to: area.path, label: area.label })),
@@ -47,7 +50,7 @@ export default function SiteHeader() {
   ];
 
   return (
-    <header className="sticky top-0 z-40 shadow-[0_24px_60px_-46px_rgba(0,0,0,0.85)]">
+    <header id="topo-da-loja" tabIndex={-1} className="sticky top-0 z-40 focus:outline-none shadow-[0_24px_60px_-46px_rgba(0,0,0,0.85)]">
       <div className="ink-panel border-b border-gold/20 backdrop-blur-xl">
         <div className="container-x grid grid-cols-[1fr_auto_1fr] items-center gap-3 py-3.5 sm:py-4">
           <div className="flex items-center">
@@ -87,16 +90,14 @@ export default function SiteHeader() {
                       {content["nav.estudio"]}
                     </Link>
                   ) : null}
-                  <Link
+                  {accountEnabled ? <Link
                     to="/minha-conta"
                     onClick={() => setOpen(false)}
                     className="block px-3 py-2 text-sm text-foreground/80"
-                  >
-                    Minha conta e pedidos
-                  </Link>
-                  <Link to="/contato" onClick={() => setOpen(false)} className="block px-3 py-2 text-sm text-foreground/80">
+                  >Minha conta e pedidos</Link> : null}
+                  {publicPageEnabled(settings, "page_contato") ? <Link to="/contato" onClick={() => setOpen(false)} className="block px-3 py-2 text-sm text-foreground/80">
                     Falar com a {storeName}
-                  </Link>
+                  </Link> : null}
                 </div>
               </SheetContent>
             </Sheet>
@@ -115,14 +116,11 @@ export default function SiteHeader() {
                 {storeName}
               </span>
             )}
-            {tagline ? (
-              <span className="hidden text-[9px] uppercase tracking-[0.34em] text-gold sm:block">{tagline}</span>
-            ) : null}
           </Link>
 
           <div className="flex items-center justify-end gap-4 sm:gap-5">
             <ThemeToggle enabled={settings?.dark_mode_enabled !== false} />
-            {!isLoadingAuth &&
+            {accountEnabled && !isLoadingAuth &&
               (isAuthenticated ? (
                 <Link
                   to="/minha-conta"
@@ -141,23 +139,25 @@ export default function SiteHeader() {
                   Entrar
                 </button>
               ))}
-            <CartLink />
+            <CartLink enabled={cartEnabled} />
           </div>
         </div>
       </div>
 
       <div className="border-b border-border/80 bg-background/80 backdrop-blur-xl">
-        <nav className="container-x hidden h-11 items-center justify-center gap-7 lg:flex">
-          {navLinks.map((link) => (
-            <Link
-              key={link.key}
-              to={link.to}
-              className="relative text-[11px] uppercase tracking-[0.18em] text-foreground/70 transition hover:text-[hsl(var(--gold-deep))]"
-              activeProps={{ className: "text-[hsl(var(--gold-deep))]" }}
-            >
-              {link.label}
-            </Link>
-          ))}
+        <nav aria-label="Navegação principal" className="container-x hidden h-11 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:block">
+          <div className="flex h-full w-max min-w-full items-center justify-start gap-2 whitespace-nowrap xl:gap-3">
+            {navLinks.map((link) => (
+              <Link
+                key={link.key}
+                to={link.to}
+                className="relative shrink-0 whitespace-nowrap rounded-full px-1.5 py-2 text-[9px] font-medium uppercase tracking-[0.06em] text-foreground/75 transition hover:bg-secondary hover:text-foreground xl:px-2 xl:text-[10px]"
+                activeProps={{ className: "bg-gold/15 font-semibold text-[hsl(var(--gold-deep))] shadow-sm hover:bg-gold/20" }}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
         </nav>
         <div className="h-1 w-full bg-gradient-to-r from-transparent via-gold to-transparent" />
       </div>

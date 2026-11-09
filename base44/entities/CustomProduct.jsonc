@@ -2,6 +2,22 @@
   "name": "CustomProduct",
   "type": "object",
   "properties": {
+    "catalog_type": {
+      "type": "string",
+      "enum": ["personalizado", "album", "book"],
+      "default": "personalizado"
+    },
+    "customizable": {
+      "type": "boolean",
+      "default": true
+    },
+    "album_size": { "type": "string" },
+    "album_style": { "type": "string" },
+    "photo_capacity": { "type": "number" },
+    "page_count": { "type": "number" },
+    "cover_material": { "type": "string" },
+    "binding": { "type": "string" },
+    "print_dimensions": { "type": "string" },
     "name": {
       "type": "string"
     },
@@ -141,6 +157,9 @@
     },
     "sort": {
       "type": "number"
+    },
+    "subcategory": {
+      "type": "string"
     }
   },
   "required": [

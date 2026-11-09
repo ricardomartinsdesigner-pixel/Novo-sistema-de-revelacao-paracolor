@@ -1,3 +1,4 @@
+import { adminMfaEnabled } from "./admin-mfa.server.js";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { ensureDatabase, safeUser, getPool } from "./db.server";
 
@@ -13,8 +14,8 @@ function sign(value) {
   return createHmac("sha256", secret()).update(value).digest("base64url");
 }
 
-export function issueSession(userId) {
-  const payload = Buffer.from(JSON.stringify({ sub: userId, exp: Math.floor(Date.now() / 1000) + 7 * DAY })).toString("base64url");
+export function issueSession(userId, mfa = false) {
+  const payload = Buffer.from(JSON.stringify({ sub: userId, mfa, exp: Math.floor(Date.now() / 1000) + 7 * DAY })).toString("base64url");
   return `${payload}.${sign(payload)}`;
 }
 
@@ -47,7 +48,12 @@ export async function userFromRequest(request) {
     const decoded = JSON.parse(Buffer.from(payload, "base64url").toString());
     if (!decoded.sub || decoded.exp <= Date.now() / 1000) return null;
     const { rows } = await getPool().query("SELECT data FROM vps_records WHERE entity='User' AND id=$1", [decoded.sub]);
-    return safeUser(rows[0]?.data);
+    const user = safeUser(rows[0]?.data);
+    if (user?.role === "admin" && await adminMfaEnabled(user.id)) {
+      if (!decoded.mfa) return null;
+      return { ...user, admin_mfa_enabled: true };
+    }
+    return user;
   } catch {
     return null;
   }

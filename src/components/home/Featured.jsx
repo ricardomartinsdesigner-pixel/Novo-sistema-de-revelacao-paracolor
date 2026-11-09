@@ -46,7 +46,8 @@ function Card({ image, label, name, text, price, oldPrice, to, params }) {
 export default function Featured() {
   const { settings } = useSettings();
   const { content } = useSiteContent();
-  const { data: products = [] } = useEntityList("CustomProduct", { active: true, featured: true }, { sort: "sort", limit: 3 });
+  const { data: catalogProducts = [] } = useEntityList("CustomProduct", { active: true, featured: true }, { sort: "sort", limit: 20 });
+  const products = catalogProducts.filter((product) => !["album", "book"].includes(product.catalog_type)).slice(0, 3);
   const { data: frames = [] } = useEntityList("Frame", { active: true, featured: true }, { sort: "sort", limit: 2 });
 
   if (!moduleEnabled(settings, "destaques")) return null;

@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import AdminNav from "@/components/admin/AdminNav";
 
-export default function AdminSidebar({ pathname, email }) {
+export default function AdminSidebar({ pathname, email, user }) {
   const initial = (email || "P").trim().charAt(0).toUpperCase();
 
   return (
@@ -15,7 +15,7 @@ export default function AdminSidebar({ pathname, email }) {
       </div>
 
       <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-3 pb-5">
-        <AdminNav pathname={pathname} />
+        <AdminNav pathname={pathname} user={user} />
       </div>
 
       <div className="border-t border-white/10 p-3.5">

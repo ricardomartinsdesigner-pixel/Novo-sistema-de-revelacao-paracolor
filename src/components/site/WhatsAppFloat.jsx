@@ -21,7 +21,7 @@ export default function WhatsAppFloat() {
       target="_blank"
       rel="noreferrer"
       aria-label="Falar com a loja no WhatsApp"
-      className="fixed bottom-24 right-4 z-40 flex h-12 w-12 sm:bottom-5 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition hover:scale-105 sm:h-14 sm:w-14"
+      className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition hover:scale-105 sm:h-14 sm:w-14"
     >
       <MessageCircle className="h-6 w-6" strokeWidth={1.8} />
     </a>

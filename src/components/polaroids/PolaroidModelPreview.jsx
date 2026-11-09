@@ -2,8 +2,7 @@ import { Image as ImageIcon } from "lucide-react";
 import { captionFont } from "@/lib/caption-style";
 import { polaroidRatios } from "@/lib/polaroid";
 
-// Prévia do papel com a mesma geometria da impressão: área da foto quadrada e
-// faixa branca da legenda nas medidas reais do modelo.
+// Prévia do modelo com a mesma geometria usada no arquivo de impressão.
 export default function PolaroidModelPreview({ model, maxWidth = 190, caption = "sua legenda" }) {
   const ratios = polaroidRatios(model);
   const width = Number(model?.width_cm) || 9;

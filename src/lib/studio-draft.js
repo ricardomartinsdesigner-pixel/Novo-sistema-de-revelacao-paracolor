@@ -2,9 +2,9 @@ const STORAGE_PREFIX = "paracolor:ajustes:";
 
 const FIELDS = [
   "sizeId", "sizeLabel", "wCm", "hCm", "price", "borderPrice", "polaroidModel",
-  "aspect", "printW", "printH", "dpi",
+  "aspect", "printW", "printH", "dpi", "sourceOrientation", "printOrientation",
   "fit", "border", "zoom", "ox", "oy", "rotation", "flipH", "flipV", "copies",
-  "caption", "captionStyle",
+  "caption", "captionStyle", "captionAreaEnabled", "colorEffect",
 ];
 
 const storage = () => {
@@ -61,4 +61,35 @@ export function clearAdjustments(mode) {
   } catch {
     // ignora
   }
+}
+const UPLOAD_PREFIX = "paracolor:envio:v1:";
+
+export function readUploadDraft(userId, mode) {
+  if (!userId) return [];
+  try {
+    const data = JSON.parse(storage()?.getItem(`${UPLOAD_PREFIX}${userId}:${mode}`) || "[]");
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveUploadDraft(userId, mode, photos) {
+  if (!userId) return;
+  try {
+    const store = storage();
+    const key = `${UPLOAD_PREFIX}${userId}:${mode}`;
+    if (photos.length) {
+      const records = photos.map(({ preview: _preview, model: _model, ...photo }) => photo);
+      store?.setItem(key, JSON.stringify(records));
+    } else {
+      store?.removeItem(key);
+    }
+  } catch {
+    // O navegador pode bloquear o armazenamento local.
+  }
+}
+
+export function draftFileId(uri) {
+  return typeof uri === "string" && /^vps:[0-9a-f-]{36}$/i.test(uri) ? uri.slice(4) : "";
 }

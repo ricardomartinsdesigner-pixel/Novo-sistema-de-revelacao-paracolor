@@ -10,14 +10,14 @@ export default function UploadDropzone({ onFiles, uploading }) {
     event.preventDefault();
     setDragging(false);
     const files = Array.from(event.dataTransfer.files || []);
-    if (files.length) onFiles(files);
+    if (!uploading && files.length) onFiles(files);
   }
 
   return (
     <div
       onDragOver={(event) => {
         event.preventDefault();
-        setDragging(true);
+        if (!uploading) setDragging(true);
       }}
       onDragLeave={() => setDragging(false)}
       onDrop={handleDrop}
@@ -30,6 +30,7 @@ export default function UploadDropzone({ onFiles, uploading }) {
         type="file"
         accept={`${PHOTO_ACCEPT},application/pdf,.pdf`}
         multiple
+        disabled={uploading}
         className="hidden"
         onChange={(event) => {
           const files = Array.from(event.target.files || []);
@@ -46,6 +47,7 @@ export default function UploadDropzone({ onFiles, uploading }) {
       </p>
       <button
         type="button"
+        disabled={uploading}
         onClick={() => inputRef.current?.click()}
         className="mt-5 rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
       >

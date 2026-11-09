@@ -65,9 +65,9 @@ export default function BackupRestorePanel({ settings }) {
     if (!file || confirmation !== "RESTAURAR") return;
     setRestoring(true);
     try {
-      const response = await fetch("/api/admin/backup/restore", {
+      const response = await fetch("/api/admin/backup", {
         method: "POST",
-        headers: { "content-type": "application/gzip", "x-paracolor-restore-confirmation": confirmation },
+        headers: { "content-type": "application/octet-stream", "x-paracolor-restore-confirmation": confirmation },
         body: file,
       });
       const result = await response.json();
@@ -125,8 +125,8 @@ export default function BackupRestorePanel({ settings }) {
 
       <div className="grid gap-3 sm:grid-cols-[1fr_220px_auto] sm:items-end">
         <label className="text-xs text-muted-foreground">
-          Arquivo de backup Paracolor (.tar.gz)
-          <input ref={inputRef} type="file" accept=".gz,.tgz,application/gzip" onChange={(event) => setFile(event.target.files?.[0] || null)} className="mt-1 block w-full rounded-lg border border-input bg-background p-2 text-sm text-foreground" />
+          Arquivo de backup Paracolor (.parabackup ou .tar.gz antigo)
+          <input ref={inputRef} type="file" accept=".parabackup,.tar.gz,.tgz,application/gzip,application/octet-stream" onChange={(event) => setFile(event.target.files?.[0] || null)} className="mt-1 block w-full rounded-lg border border-input bg-background p-2 text-sm text-foreground" />
         </label>
         <label className="text-xs text-muted-foreground">
           Para confirmar, digite RESTAURAR

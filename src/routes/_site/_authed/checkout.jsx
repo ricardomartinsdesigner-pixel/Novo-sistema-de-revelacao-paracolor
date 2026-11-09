@@ -1,3 +1,4 @@
+import { isNewOnlinePayment, PAYMENT_PROVIDERS } from "@/lib/payment-providers";
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
@@ -6,19 +7,28 @@ import CheckoutSummary from "@/components/checkout/CheckoutSummary";
 import PickupNotice from "@/components/checkout/PickupNotice";
 import ShippingOptions from "@/components/checkout/ShippingOptions";
 import useCheckout from "@/hooks/use-checkout";
-import { useCart } from "@/lib/cart";
+import { cartLineTotal } from "@/lib/cart-items";
+import { selectedCoupon, useCart } from "@/lib/cart";
 import { useSettings } from "@/lib/store";
 import { useAuth } from "@/lib/AuthContext";
 import { formatBRL } from "@/lib/areas";
 import { deadlineFor } from "@/lib/deadline";
+import { ONLINE_PAYMENT, PAYMENT_METHOD_LABELS, PICKUP_PAYMENT, STORE_PAYMENT } from "@/lib/order-payment";
 
 export const Route = createFileRoute("/_site/_authed/checkout")({
   head: () => ({ meta: [{ title: "Checkout — Paracolor" }] }),
   component: CheckoutPage,
 });
 
+const PAYMENT_DESCRIPTION = {
+  ...Object.fromEntries(Object.entries(PAYMENT_PROVIDERS).map(([id, provider]) => [id, provider.description])),
+  [ONLINE_PAYMENT]: "Você será direcionado ao Mercado Pago para concluir o pagamento.",
+  [STORE_PAYMENT]: "Combine o pagamento com a loja para liberar a produção.",
+  [PICKUP_PAYMENT]: "A loja prepara seu pedido e você paga no balcão quando for buscar.",
+};
+
 function CheckoutPage() {
-  const { items, ready } = useCart();
+  const { items, ready, campaignCoupon, chooseCoupon } = useCart();
 
   const { settings, isLoading: settingsLoading } = useSettings();
   const { user } = useAuth();
@@ -31,9 +41,14 @@ function CheckoutPage() {
     shipping_cep: "",
     shipping_address: user?.address || "",
     gift_message: "",
-    payment_method: "retirada",
+    payment_method: "",
   });
-  const [coupon, setCoupon] = useState("");
+  const [enteredCoupon, setEnteredCoupon] = useState(null);
+  const coupon = enteredCoupon ?? selectedCoupon(campaignCoupon, user?.id);
+  function setCoupon(value) {
+    setEnteredCoupon(value);
+    if (campaignCoupon && value !== selectedCoupon(campaignCoupon, user?.id)) chooseCoupon("");
+  }
   const [approval, setApproval] = useState("sim");
 
   // Perfil carregado depois da página: completa o que ainda estiver vazio sem
@@ -53,7 +68,10 @@ function CheckoutPage() {
     () => (settings ? deadlineFor(settings, items.map((item) => item.area)) : null),
     [settings, items]
   );
-  const { quote, calculating, error, submitting, submit } = useCheckout(form, coupon, approval);
+  const { quote, calculating, error, submitting, submit } = useCheckout(form, coupon, approval, user?.id);
+  const methods = (quote?.payment_methods ?? []).filter((method) => method !== PICKUP_PAYMENT || form.fulfillment === "retirada");
+  const defaultMethod = !methods.some(isNewOnlinePayment) && methods.includes(STORE_PAYMENT) ? STORE_PAYMENT : methods[0];
+  const paymentMethod = methods.includes(form.payment_method) ? form.payment_method : defaultMethod;
   const needsApproval = items.some((item) => item.options?.art_approval_mode && item.options.art_approval_mode !== "desativada");
   // Entrega só aparece quando a loja habilita o frete no painel.
   const shippingAvailable = Boolean(settings?.shipping_enabled || settings?.shipping_quote_enabled);
@@ -104,7 +122,7 @@ function CheckoutPage() {
       <p className="eyebrow">Finalizar</p>
       <h1 className="mt-2 text-4xl">Checkout</h1>
 
-      <form onSubmit={submit} className="mt-8 grid gap-8 lg:grid-cols-[1.6fr_1fr]">
+      <form onSubmit={(event) => submit(event, paymentMethod)} className="mt-8 grid gap-8 lg:grid-cols-[1.6fr_1fr]">
         <div className="space-y-6">
           <section className="rounded-[1.25rem] border border-border bg-card p-6">
             <h2 className="text-xl">Seus dados</h2>
@@ -181,33 +199,28 @@ function CheckoutPage() {
           <section className="rounded-[1.25rem] border border-border bg-card p-6">
             <h2 className="text-xl">Pagamento</h2>
             <div className="mt-4 space-y-3">
-              <label className={`block cursor-pointer rounded-xl border p-4 text-sm ${form.payment_method === "mercadopago" ? "border-primary bg-accent/50" : "border-gold/45 bg-background hover:border-gold"}`}>
-                <input
-                  type="radio"
-                  name="payment"
-                  className="mr-2 accent-primary"
-                  checked={form.payment_method === "mercadopago"}
-                  disabled={!settings?.online_payment_enabled}
-                  onChange={() => update("payment_method", "mercadopago")}
-                />
-                Mercado Pago (PIX ou cartão)
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  {settings?.online_payment_enabled ? "Você é levado ao ambiente seguro do Mercado Pago para pagar." : "Pagamento online ainda indisponível. Você pode registrar o pedido e combinar o pagamento na loja."}
-                </span>
-              </label>
-              <label className={`block cursor-pointer rounded-xl border p-4 text-sm ${form.payment_method === "retirada" ? "border-primary bg-accent/50" : "border-gold/45 bg-background hover:border-gold"}`}>
-                <input
-                  type="radio"
-                  name="payment"
-                  className="mr-2 accent-primary"
-                  checked={form.payment_method === "retirada"}
-                  onChange={() => update("payment_method", "retirada")}
-                />
-                Combinar o pagamento na loja
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  O pedido fica registrado e a loja confirma o pagamento antes de produzir.
-                </span>
-              </label>
+              {calculating ? (
+                <p className="text-xs text-muted-foreground">Conferindo as formas de pagamento…</p>
+              ) : methods.map((method) => (
+                <label key={method} className={`block cursor-pointer rounded-xl border p-4 text-sm ${paymentMethod === method ? "border-primary bg-accent/50" : "border-gold/45 bg-background hover:border-gold"}`}>
+                  <input
+                    type="radio"
+                    name="payment"
+                    className="mr-2 accent-primary"
+                    checked={paymentMethod === method}
+                    onChange={() => update("payment_method", method)}
+                  />
+                  {quote?.routed_payment && isNewOnlinePayment(method)
+                    ? method === "sicoob_pix" ? "Pix" : "Cartão de crédito"
+                    : PAYMENT_METHOD_LABELS[method]}
+                  <span className="mt-1 block text-xs text-muted-foreground">{PAYMENT_DESCRIPTION[method]}</span>
+                </label>
+              ))}
+              {!calculating && quote && !methods.length && (
+                <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                  Nenhuma forma de pagamento está disponível para este pedido no momento. Fale com a loja para continuar.
+                </p>
+              )}
             </div>
 
             {needsApproval && (
@@ -232,7 +245,8 @@ function CheckoutPage() {
           </section>
         </div>
 
-        <CheckoutSummary quote={quote} calculating={calculating} coupon={coupon} setCoupon={setCoupon} submitting={submitting} error={error} readyDate={readyDate} />
+        <CheckoutSummary quote={quote} calculating={calculating} coupon={coupon} setCoupon={setCoupon} submitting={submitting}
+          error={error} itemEstimate={items.reduce((total, item) => total + cartLineTotal(item), 0)} readyDate={readyDate} paymentBlocked={!paymentMethod} payOnPickup={paymentMethod === PICKUP_PAYMENT} />
       </form>
     </div>
   );

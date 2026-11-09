@@ -19,7 +19,9 @@ export default function QuantityPricingPanel({ category, entity }) {
   const pricesQuery = useEntityList("TierPrice", { category }, { limit: 500 });
   const groupsQuery = useEntityList("PriceGroup", { category }, { sort: "sort" });
 
-  const sizes = sizesQuery.data ?? [];
+  const sizes = (sizesQuery.data ?? []).filter((size) =>
+    (category !== "magnet" || size.kind !== "strip_kit") && (category !== "revelacao" || !size.is_photo_3x4)
+  );
   const tiers = tiersQuery.data ?? [];
   const prices = (pricesQuery.data ?? []).filter((price) => !price.category || price.category === category);
   const sharedGroup = (groupsQuery.data ?? [])[0];

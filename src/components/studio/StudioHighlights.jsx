@@ -2,7 +2,7 @@ import { Sparkles } from "lucide-react";
 import { Image } from "@/components/ui/image";
 
 const QUOTE_IMAGE =
-  "https://media.base44.com/images/public/6aebd7693f7d30fc2024dc02/c190e344f_generated_3df8c815.jpg";
+  "/loja/estudio-destaque.webp";
 
 /** Os três diferenciais do estúdio em faixa dourada e a citação dos 6 estúdios. */
 export default function StudioHighlights({ content, image }) {

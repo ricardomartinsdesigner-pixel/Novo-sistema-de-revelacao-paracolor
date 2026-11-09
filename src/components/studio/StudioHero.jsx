@@ -1,15 +1,12 @@
 import { Image } from "@/components/ui/image";
-
-/** Capa usada enquanto o painel não define a imagem do estúdio. */
-const HERO_FALLBACK =
-  "https://media.base44.com/images/public/6aebd7693f7d30fc2024dc02/9deffabe8_generated_067660f7.jpg";
+import { STUDIO_COVER_FALLBACK } from "@/lib/areas";
 
 /** Abertura cinematográfica: capa em luz quente, véu diagonal, cortina e selo dourado. */
 export default function StudioHero({ image, imageAlt, title, text }) {
   return (
     <section className="relative h-[660px] overflow-hidden bg-night sm:h-[780px] lg:h-[860px]">
       <Image
-        src={image || HERO_FALLBACK}
+        src={image || STUDIO_COVER_FALLBACK}
         alt={imageAlt}
         className="absolute inset-0 h-full w-full saturate-[.85] brightness-[.7]"
         fittingType="fill"

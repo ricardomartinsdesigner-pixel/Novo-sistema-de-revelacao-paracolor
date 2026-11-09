@@ -4,23 +4,31 @@ export const AREAS = [
     label: "Revelação",
     path: "/revelacao",
     tagline: "Fotos clássicas e quadradas, com ou sem borda, em papel fotográfico de verdade.",
-    image: "https://media.base44.com/images/public/6aebd7693f7d30fc2024dc02/9057474b8_generated_c016e18b.png",
+    image: "/loja/revelacao.webp",
     cta: "Revelar fotos",
   },
   {
     key: "polaroids",
-    label: "Polaroids",
+    label: "Polaroides",
     path: "/polaroids",
     tagline: "Aquele formato instantâneo com moldura branca e legenda escrita à mão.",
-    image: "https://media.base44.com/images/public/6aebd7693f7d30fc2024dc02/5d00b9c29_generated_10711ebd.png",
+    image: "/loja/polaroids.webp",
     cta: "Criar polaroids",
+  },
+  {
+    key: "fotos_ima",
+    label: "Fotos Ímã",
+    path: "/fotos-ima",
+    tagline: "Tirinhas e fotos magnéticas personalizadas com as suas imagens.",
+    image: "/loja/personalizados.webp",
+    cta: "Criar fotos ímã",
   },
   {
     key: "banners",
     label: "Banners",
     path: "/banners",
     tagline: "Lonas, faixas e banners promocionais no tamanho que você precisa.",
-    image: "https://media.base44.com/images/public/6aebd7693f7d30fc2024dc02/1d8a2815a_generated_1ad407e5.png",
+    image: "/loja/banners.webp",
     cta: "Fazer orçamento",
   },
   {
@@ -28,7 +36,7 @@ export const AREAS = [
     label: "Personalizados",
     path: "/personalizados",
     tagline: "Canecas, almofadas e porta-retratos com as suas fotos.",
-    image: "https://media.base44.com/images/public/6aebd7693f7d30fc2024dc02/6826100ce_generated_00c45475.png",
+    image: "/loja/personalizados.webp",
     cta: "Ver produtos",
   },
   {
@@ -36,12 +44,21 @@ export const AREAS = [
     label: "Molduras",
     path: "/molduras",
     tagline: "Molduras para dar acabamento e presença às suas fotos favoritas.",
-    image: "https://media.base44.com/images/public/6aebd7693f7d30fc2024dc02/316be45c4_generated_93d09dca.png",
+    image: "/loja/molduras.webp",
     cta: "Ver vitrine",
+  },
+  {
+    key: "albuns_books",
+    label: "Álbuns e Books",
+    path: "/albuns-e-books",
+    tagline: "Álbuns e books para guardar histórias, com opções de capa personalizada.",
+    image: "/loja/personalizados.webp",
+    cta: "Ver álbuns e books",
   },
 ];
 
-export const HERO_IMAGE = "https://media.base44.com/images/public/6aebd7693f7d30fc2024dc02/52dc2aa3d_generated_a9f3a6ca.png";
+export const HERO_IMAGE = "/loja/inicio.webp";
+export const STUDIO_COVER_FALLBACK = "/loja/estudio.webp";
 
 export function areaByKey(key) {
   return AREAS.find((area) => area.key === key);
@@ -58,6 +75,7 @@ export const STATUS_LABELS = {
   em_producao: "Em produção",
   aguardando_conferencia: "Aguardando conferência",
   pronto: "Pronto para retirada/envio",
+  retirado: "Retirado",
   enviado: "Enviado",
   concluido: "Entregue",
   cancelado: "Cancelado",
@@ -74,6 +92,7 @@ export const STATUS_FLOW = [
   "em_producao",
   "aguardando_conferencia",
   "pronto",
+  "retirado",
   "enviado",
   "concluido",
   "cancelado",

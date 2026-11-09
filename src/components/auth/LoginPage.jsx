@@ -13,6 +13,8 @@ export function LoginPage() {
   const returnTo = safeReturnTo();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [requiresOtp, setRequiresOtp] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -21,7 +23,7 @@ export function LoginPage() {
     setError("");
     setBusy(true);
     try {
-      const result = await loginWithMfa(email, password);
+      const result = await loginWithMfa(email, password, otp);
       if (result.mfa_required) {
         await continueMfa(result, returnTo);
         return;
@@ -29,6 +31,7 @@ export function LoginPage() {
       // A hard redirect: the app re-initializes with the new session.
       window.location.href = returnTo;
     } catch (err) {
+      if (err?.data?.code === "MFA_REQUIRED") setRequiresOtp(true);
       setError(err.message || "E-mail ou senha inválidos");
       setBusy(false);
     }
@@ -57,6 +60,10 @@ export function LoginPage() {
             <Input id="login-password" type="password" autoComplete="current-password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="h-12 pl-10" required />
           </div>
         </div>
+        {requiresOtp && <div className="space-y-2">
+          <Label htmlFor="login-otp">Código do autenticador ou de recuperação</Label>
+          <Input id="login-otp" autoComplete="one-time-code" maxLength={20} required value={otp} onChange={(e) => setOtp(e.target.value)} />
+        </div>}
         <SubmitButton busy={busy} busyLabel="Entrando...">
           Entrar
         </SubmitButton>
@@ -67,6 +74,7 @@ export function LoginPage() {
           Criar conta
         </AuthLink>
       </p>
+      <p className="mt-3 text-center text-xs"><AuthLink to="/contato">Preciso de ajuda para acessar minha conta</AuthLink></p>
     </AuthLayout>
   );
 }

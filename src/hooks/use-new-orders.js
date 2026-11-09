@@ -1,27 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { getProductionStartOverview, getUnreadOrderAlerts } from "@/lib/admin-operations-fns";
 
-/** Pedidos pagos que ainda não entraram em produção. */
-export const NEW_ORDER_STATUSES = [
-  "pagamento_aprovado",
-  "aguardando_arte",
-  "aguardando_aprovacao",
-  "ajustes_solicitados",
-  "arte_aprovada",
-];
+const empty = { orders: [], total: 0 };
 
-export function useNewOrders(limit = 5) {
-  const query = { payment_status: "aprovado", status: { $in: NEW_ORDER_STATUSES } };
+export function useNewOrders({ enabled = true } = {}) {
   const { data } = useQuery({
-    queryKey: ["admin-new-orders", limit],
-    queryFn: async () => {
-      const [page, total] = await Promise.all([
-        base44.entities.Order.filter(query, { sort: "-created_date", limit }),
-        base44.entities.Order.count(query),
-      ]);
-      return { orders: page.items ?? [], total };
-    },
-    refetchInterval: 30000,
+    queryKey: ["admin-new-orders"],
+    queryFn: () => getProductionStartOverview(),
+    refetchInterval: 30_000,
+    enabled,
   });
-  return { orders: data?.orders ?? [], total: data?.total ?? 0 };
+  const { data: unreadData } = useQuery({
+    queryKey: ["admin-unread-order-alerts"],
+    queryFn: () => getUnreadOrderAlerts(),
+    refetchInterval: 30_000,
+    enabled,
+  });
+  return {
+    ready: data?.ready ?? empty,
+    waiting: data?.waiting ?? empty,
+    unread: unreadData ?? { items: [], total: 0 },
+  };
 }

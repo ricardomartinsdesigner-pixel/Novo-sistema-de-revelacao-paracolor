@@ -1,8 +1,38 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth-middleware";
+import { searchClients } from "@/lib/client-search.server";
+import { hasStaffAccess } from "@/lib/staff-access";
 
 const CONFIRM_WORD = "EXCLUIR";
+
+export const findClients = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(z.object({ term: z.string().max(160), offset: z.number().int().min(0), professional: z.boolean().optional() }))
+  .handler(({ data, context }) => {
+    if (!hasStaffAccess(context.user, "clients")) throw new Error("Acesso restrito aos níveis de atendimento, gerência e administração.");
+    return searchClients(data.term, data.offset, data.professional);
+  });
+
+export const updateClientProfile = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(z.object({
+    id: z.string().min(1),
+    full_name: z.string().trim().min(1).max(160),
+    phone: z.string().trim().max(40),
+    address: z.string().trim().max(400),
+    professional_pricing: z.boolean(),
+    allow_pickup_payment: z.boolean(),
+  }))
+  .handler(async ({ data, context }) => {
+    if (context.user.role !== "admin") throw new Error("Apenas administradores podem alterar o cadastro de clientes.");
+    const { id, ...profile } = data;
+    await context.getBase44().asServiceRole.entities.User.update(id, {
+      ...profile,
+      allow_pickup_payment: profile.professional_pricing && profile.allow_pickup_payment,
+    });
+    return { ok: true };
+  });
 
 // O cliente pede a exclusão definitiva; a loja processa depois.
 export const requestAccountDeletion = createServerFn({ method: "POST" })

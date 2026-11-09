@@ -16,7 +16,17 @@
     },
     "address": {
       "type": "string",
-      "description": "Endere\u00e7o completo informado no cadastro (opcional)"
+      "description": "Endereço completo informado no cadastro (opcional)"
+    },
+    "professional_pricing": {
+      "type": "boolean",
+      "default": false,
+      "description": "Acesso à tabela profissional de revelação, concedido pelo administrador."
+    },
+    "allow_pickup_payment": {
+      "type": "boolean",
+      "default": false,
+      "description": "Permite ao fotógrafo profissional pagar no balcão ao retirar o pedido."
     }
   },
   "required": [

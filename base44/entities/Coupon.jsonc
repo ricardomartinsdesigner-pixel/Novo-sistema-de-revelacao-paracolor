@@ -29,6 +29,67 @@
     },
     "expires_at": {
       "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "customer_id": {
+      "type": "string"
+    },
+    "area": {
+      "type": "string"
+    },
+    "product_id": {
+      "type": "string"
+    },
+    "product_name": {
+      "type": "string"
+    },
+    "starts_at": {
+      "type": "string"
+    },
+    "ends_at": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "image_url": {
+      "type": "string"
+    },
+    "min_quantity": {
+      "type": "number"
+    },
+    "max_discount": {
+      "type": "number"
+    },
+    "max_uses": {
+      "type": "number"
+    },
+    "per_customer": {
+      "type": "number"
+    },
+    "allow_professional": {
+      "type": "boolean"
+    },
+    "allow_product_promo": {
+      "type": "boolean"
+    },
+    "campaign_mode": {
+      "type": "string",
+      "enum": [
+        "publico",
+        "exclusivo",
+        "automatico"
+      ]
+    },
+    "notice": {
+      "type": "string",
+      "enum": [
+        "none",
+        "banner",
+        "popup"
+      ]
     }
   },
   "required": [
@@ -36,7 +97,11 @@
     "value"
   ],
   "rls": {
-    "read": {},
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
     "create": {
       "user_condition": {
         "role": "admin"

@@ -29,7 +29,7 @@ function ContentPage() {
           sort="sort"
           defaults={{ active: true, sort: 0 }}
           fields={[
-            { key: "image_url", label: "Foto", type: "image" },
+            { key: "image_url", label: "Foto", type: "image", pixelSpec: "1200 × 1200 px (proporção 1:1), recomendado para a galeria da página inicial." },
             { key: "caption", label: "Legenda (opcional)", type: "textarea" },
             { key: "customer_name", label: "Cliente (opcional)", type: "text" },
             { key: "sort", label: "Ordem", type: "number" },

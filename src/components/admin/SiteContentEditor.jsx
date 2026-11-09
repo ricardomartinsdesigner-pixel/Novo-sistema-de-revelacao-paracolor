@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { CONTENT_GROUPS, IMAGE_KEYS } from "@/lib/site-content";
+import { CONTENT_GROUPS, IMAGE_KEYS, updatedContentValue } from "@/lib/site-content";
 import SiteImageField from "@/components/admin/SiteImageField";
 
 async function loadRecords() {
@@ -26,7 +26,7 @@ export default function SiteContentEditor() {
       for (const field of group.fields) initial[field.key] = "";
     }
     for (const record of records) {
-      if (record?.key) initial[record.key] = record.value || "";
+      if (record?.key) initial[record.key] = updatedContentValue(record.key, record.value || "");
     }
     setForm(initial);
   }, [form, isLoading, records]);
@@ -73,7 +73,7 @@ export default function SiteContentEditor() {
   return (
     <div className="space-y-6">
       {CONTENT_GROUPS.map((group) => (
-        <section key={group.id} className="card-glass p-5">
+        <section key={group.id} id={`conteudo-${group.id}`} className="card-glass scroll-mt-20 p-5">
           <h2 className="text-lg">{group.label}</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {group.fields.map((field) => {
@@ -83,6 +83,8 @@ export default function SiteContentEditor() {
                     <SiteImageField
                       label={field.label}
                       hint={field.hint}
+                      pixelSpec={field.pixelSpec}
+                      previewCrop={field.key === "page.estudio.cover"}
                       value={form[field.key]}
                       fallback={field.default}
                       onChange={(value) => change(field.key, value)}

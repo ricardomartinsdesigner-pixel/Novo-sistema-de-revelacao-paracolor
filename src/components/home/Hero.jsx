@@ -2,23 +2,14 @@ import { Fragment } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Star } from "lucide-react";
 import { Image } from "@/components/ui/image";
-import { formatBRL } from "@/lib/areas";
-import { useEntityList } from "@/lib/store";
-import { useAreas, useSiteContent } from "@/hooks/use-site-content";
+import { useSiteContent } from "@/hooks/use-site-content";
 import { Button } from "@/components/ui/button";
 
 export default function Hero() {
   const { content } = useSiteContent();
-  const areas = useAreas();
-  const { data: sizes = [] } = useEntityList("PhotoSize", { active: true }, { sort: "sort", limit: 50 });
-
-  const cheapest = sizes.reduce(
-    (best, size) => (!best || Number(size.price) < Number(best.price) ? size : best),
-    null
-  );
-  const polaroidCard = areas.find((area) => area.key === "polaroids");
-  const printCard = areas.find((area) => area.key === "revelacao");
   const titleLines = (content["home.hero.title"] || "").split("\n");
+  const sealOuterText = content["home.hero.seal_outer_text"] || "PARACOLOR · DESDE 1994";
+  const sealYear = content["home.hero.seal_year"] || "1994";
 
   return (
     <section className="ink-panel relative overflow-hidden">
@@ -71,17 +62,24 @@ export default function Hero() {
         </div>
 
         <div className="relative animate-fade-in">
-          {printCard ? (
-            <div className="paper absolute -right-5 -top-7 hidden w-28 rotate-[6deg] rounded-sm border border-white/40 bg-card p-1.5 sm:block">
-              <Image
-                src={printCard.image}
-                alt="Foto revelada em papel fotográfico"
-                className="aspect-[4/3] w-full rounded-[2px] object-cover"
-                fittingType="fill"
-              />
-            </div>
-          ) : null}
-
+          <svg
+            viewBox="0 0 150 150"
+            role="img"
+            aria-label={sealOuterText.replace(/[·•]/g, " ").trim()}
+            className="pointer-events-none absolute -right-1 -top-4 z-10 h-20 w-20 sm:-right-3 sm:-top-5 sm:h-24 sm:w-24 lg:-right-5 lg:-top-6 lg:h-28 lg:w-28"
+          >
+            <defs>
+              <path id="home-since-seal-path" d="M75 75m-56 0a56 56 0 1 1 112 0a56 56 0 1 1-112 0" />
+            </defs>
+            <g className="anim-seal-spin" style={{ transformOrigin: "75px 75px" }}>
+              <circle cx="75" cy="75" r="72" fill="rgba(11,11,11,.72)" stroke="#C9A24A" />
+              <text fill="#C9A24A" fontFamily="system-ui,sans-serif" fontSize={sealOuterText.length > 34 ? 7 : sealOuterText.length > 28 ? 8 : 10} letterSpacing="3.5">
+                <textPath href="#home-since-seal-path">{sealOuterText} · </textPath>
+              </text>
+            </g>
+            <circle cx="75" cy="75" r="40" fill="rgba(11,11,11,.72)" stroke="#6E5A2E" />
+            <text x="75" y="75" textAnchor="middle" dominantBaseline="central" fill="#C9A24A" fontFamily="Inter,system-ui,sans-serif" fontSize={sealYear.length > 5 ? 13 : 18} fontWeight="700">{sealYear}</text>
+          </svg>
           <div className="relative overflow-hidden rounded-[1.25rem] border border-white/15 shadow-[0_60px_120px_-60px_rgba(0,0,0,0.9)]">
             <Image
               src={content["home.hero.image"]}
@@ -90,29 +88,7 @@ export default function Hero() {
               fittingType="fill"
             />
             <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/10" />
-            {cheapest ? (
-              <div className="glass-dark absolute bottom-4 right-4 rounded-xl px-4 py-3 text-right">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-white/55">
-                  Impressão {cheapest.name}
-                </p>
-                <p className="font-display text-lg leading-tight text-white">
-                  a partir de {formatBRL(cheapest.price)}
-                </p>
-              </div>
-            ) : null}
           </div>
-
-          {polaroidCard ? (
-            <div className="paper absolute -bottom-8 -left-6 hidden w-24 rotate-[-7deg] rounded-sm border border-white/40 bg-card p-1.5 sm:block">
-              <Image
-                src={polaroidCard.image}
-                alt="Polaroid impressa com moldura branca"
-                className="aspect-square w-full rounded-[2px] object-cover"
-                fittingType="fill"
-              />
-              <div className="h-4" />
-            </div>
-          ) : null}
         </div>
       </div>
     </section>

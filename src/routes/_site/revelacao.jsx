@@ -7,6 +7,7 @@ import ShippingEstimate from "@/components/site/ShippingEstimate";
 import { formatDeadlineDuration } from "@/lib/deadline";
 import { formatBRL } from "@/lib/areas";
 import { useAreas, useSiteContent } from "@/hooks/use-site-content";
+import { publicPageEnabled } from "@/lib/public-pages";
 
 export const Route = createFileRoute("/_site/revelacao")({
   head: () => ({
@@ -41,6 +42,9 @@ function RevelacaoPage() {
               <Button asChild size="lg" variant="outline" className="rounded-full">
                 <a href="#formatos">Ver tamanhos e preços</a>
               </Button>
+              {publicPageEnabled(settings, "page_simulador") && <Button asChild size="lg" variant="outline" className="rounded-full">
+                <Link to="/simulador">Calcular meu pedido</Link>
+              </Button>}
             </div>
             <p className="mt-5 text-xs text-muted-foreground">
               Prazo de produção: <strong className="text-foreground">{formatDeadlineDuration(settings, "revelacao")}</strong> após a confirmação do pagamento
@@ -69,10 +73,15 @@ function RevelacaoPage() {
                     {size.width_cm} x {size.height_cm} cm
                   </p>
                 </div>
-                <p className="font-display text-2xl text-primary">{formatBRL(size.price)}</p>
+                <div className="text-right">
+                  <p className="font-display text-2xl text-primary">{formatBRL(size.price)}</p>
+                  {size.is_photo_3x4 && <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">por folha · 12 fotos</p>}
+                </div>
               </div>
               <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                {size.description || "Papel fotográfico brilhante, 300 DPI."}
+                {size.is_photo_3x4
+                  ? "12 fotos de 3,1 × 4,1 cm em uma folha de 15,2 × 13,5 cm. Indicada para escola, currículo e documentos não oficiais."
+                  : size.description || "Papel fotográfico brilhante, 300 DPI."}
               </p>
               <p className="mt-3 text-[11px] text-muted-foreground">
                 Mínimo recomendado: {Math.round((size.width_cm / 2.54) * 300)} x {Math.round((size.height_cm / 2.54) * 300)} px

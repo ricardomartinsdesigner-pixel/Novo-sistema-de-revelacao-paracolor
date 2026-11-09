@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Copy, ImageOff, Pencil, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, Copy, GripVertical, ImageOff, Pencil, Trash2 } from "lucide-react";
 import PhotoThumb from "@/components/studio/PhotoThumb";
 
 const QUALITY_DOT = {
@@ -31,6 +31,7 @@ export default function PhotoCard({
   onSizeChange,
   onPreview,
 }) {
+  const canEdit = photo.kind !== "pdf" && photo.status === "ready";
   const hasAlert = (photo.alerts || []).some((alert) => alert !== "resolucao_baixa");
   // A caixa da miniatura tem a proporção real do papel escolhido: 10x15 em pé,
   // 15x10 deitado, 15x21 mais alto — e a polaroide segue o papel dela (9x11).
@@ -69,11 +70,8 @@ export default function PhotoCard({
       )}
 
       <div
-        {...(dragHandleProps || {})}
         onClick={() => onPreview?.(photo.id)}
-        className={`relative overflow-hidden bg-secondary ${
-          dragHandleProps ? "cursor-grab active:cursor-grabbing" : ""
-        }`}
+        className="relative overflow-hidden bg-secondary"
         style={{ aspectRatio: String(boxAspect) }}
       >
         {photo.status === "error" ? (
@@ -95,6 +93,12 @@ export default function PhotoCard({
           <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-background/85 text-xs font-medium text-foreground">
             Enviando…
           </div>
+        )}
+        {dragHandleProps && (
+          <button type="button" {...dragHandleProps} aria-label={"Arrastar " + photo.name} onClick={(event) => event.stopPropagation()}
+            className="absolute bottom-1 right-1 z-20 flex h-9 w-9 touch-none select-none items-center justify-center rounded-lg border border-border bg-background/95 cursor-grab active:cursor-grabbing">
+            <GripVertical className="h-5 w-5" />
+          </button>
         )}
       </div>
 
@@ -125,19 +129,23 @@ export default function PhotoCard({
             </span>
           </p>
         </div>
-        {compact ? null : (
+        {(!compact || canEdit) && (
           <div className="flex flex-none items-center gap-0.5 rounded-md border border-gold/30 bg-background/85 p-0.5 shadow-sm">
-            {photo.kind !== "pdf" ? (
+            {canEdit ? (
               <button type="button" onClick={() => onEdit(photo.id)} aria-label="Editar enquadramento" className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground">
                 <Pencil className="h-3.5 w-3.5" />
               </button>
             ) : null}
-            <button type="button" onClick={() => onDuplicate(photo.id)} aria-label="Duplicar foto" className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground">
-              <Copy className="h-3.5 w-3.5" />
-            </button>
-            <button type="button" onClick={() => onDelete(photo.id)} aria-label="Excluir foto" className="rounded-md p-1 text-muted-foreground hover:bg-red-50 hover:text-red-600">
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            {!compact && (
+              <>
+                <button type="button" onClick={() => onDuplicate(photo.id)} aria-label="Duplicar foto" className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground">
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+                <button type="button" onClick={() => onDelete(photo.id)} aria-label="Excluir foto" className="rounded-md p-1 text-muted-foreground hover:bg-red-50 hover:text-red-600">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>

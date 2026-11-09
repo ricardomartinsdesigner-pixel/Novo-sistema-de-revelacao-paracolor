@@ -10,12 +10,13 @@ export async function loadIntegrationConfig(base44) {
   return rows[0] ?? null;
 }
 
-export async function getMercadoPagoToken(base44) {
+export async function getMercadoPagoToken(base44, { includeDisabled = false } = {}) {
+  if (process.env.PAYMENTS_SANDBOX_MODE === "true" && !includeDisabled) return "";
   const config = await loadIntegrationConfig(base44).catch(() => null);
   const enabled = config ? config.mp_enabled === true : true;
   const stored = (config?.mp_access_token ?? "").trim();
   const token = stored || (process.env.MERCADO_PAGO_ACCESS_TOKEN ?? "").trim();
-  return enabled ? token : "";
+  return enabled || includeDisabled ? token : "";
 }
 
 export async function getMercadoPagoWebhookSecret(base44) {

@@ -32,6 +32,10 @@
     "height_cm": {
       "type": "number"
     },
+    "print_orientation": {
+      "type": "string",
+      "enum": ["landscape", "portrait", "square"]
+    },
     "fit_mode": {
       "type": "string"
     },
@@ -104,7 +108,9 @@
       ]
     },
     "create": {
-      "created_by_id": "{{user.id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "update": {
       "user_condition": {

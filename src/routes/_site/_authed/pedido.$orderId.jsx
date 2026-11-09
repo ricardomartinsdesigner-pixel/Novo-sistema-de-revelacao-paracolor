@@ -1,19 +1,32 @@
+import { nextOrderStep } from "@/lib/customer-order";
+import OnlineProviderPayment from "@/components/orders/OnlineProviderPayment";
+import { isNewOnlinePayment } from "@/lib/payment-providers";
+import OrderPhotoGallery from "@/components/orders/OrderPhotoGallery";
+import { listOrderPhotos } from "@/lib/photo-order";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Check, Download, Loader2, Package, XCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
-import { createDownloadLink, createPayment, settleQuickDeadlines } from "@/lib/store-fns";
+import { createDownloadLink, createPayment } from "@/lib/store-fns";
 import { useSignedUrl, useSettings } from "@/lib/store";
 import { Image } from "@/components/ui/image";
 import OrderItemOptions from "@/components/orders/OrderItemOptions";
 import OrderCountdown from "@/components/orders/OrderCountdown";
 import { STATUS_LABELS, formatBRL, formatDate } from "@/lib/areas";
+import { awaitsPickupPayment, isPickupPaymentOrder, ONLINE_PAYMENT, PAYMENT_METHOD_LABELS, STORE_PAYMENT } from "@/lib/order-payment";
+import PickupQrCode from "@/components/orders/PickupQrCode";
 
 export const Route = createFileRoute("/_site/_authed/pedido/$orderId")({
   head: () => ({ meta: [{ title: "Seu pedido — Paracolor" }] }),
+  validateSearch: (search) => ({
+    pagamento: ["sucesso", "pendente", "falha"].includes(search.pagamento) ? search.pagamento : undefined,
+    transaction_nsu: typeof search.transaction_nsu === "string" ? search.transaction_nsu.slice(0, 150) : undefined,
+    slug: typeof search.slug === "string" ? search.slug.slice(0, 200) : undefined,
+    order_nsu: typeof search.order_nsu === "string" ? search.order_nsu.slice(0, 120) : undefined,
+  }),
   component: OrderPage,
 });
 
@@ -40,13 +53,26 @@ function OrderPage() {
   const { orderId } = Route.useParams();
   const [downloading, setDownloading] = useState("");
   const [paying, setPaying] = useState(false);
+  const search = Route.useSearch();
+  const { pagamento } = search;
+  const [checking, setChecking] = useState(false);
+  useEffect(() => {
+    if (pagamento !== "sucesso" && pagamento !== "pendente") {
+      setChecking(false);
+      return;
+    }
+    setChecking(true);
+    const timeout = setTimeout(() => setChecking(false), 75_000);
+    return () => clearTimeout(timeout);
+  }, [orderId, pagamento]);
   const { settings } = useSettings();
 
-  const { data: order, isLoading } = useQuery({
+  const { data: order, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["order", orderId],
-    queryFn: async () => {
-      await settleQuickDeadlines().catch(() => null);
-      return base44.entities.Order.get(orderId);
+    queryFn: () => base44.entities.Order.get(orderId),
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      return checking && data?.payment_method === ONLINE_PAYMENT && data.payment_status === "pendente" && data.status !== "cancelado" ? 4000 : false;
     },
   });
   const { data: items = [] } = useQuery({
@@ -55,7 +81,7 @@ function OrderPage() {
   });
   const { data: photos = [] } = useQuery({
     queryKey: ["order-photos", orderId],
-    queryFn: async () => (await base44.entities.OrderPhoto.filter({ order_id: orderId }, { limit: 500, sort: "sort" })).items ?? [],
+    queryFn: () => listOrderPhotos(base44.entities, orderId),
   });
 
   if (isLoading) {
@@ -64,6 +90,8 @@ function OrderPage() {
   if (!order) {
     return <div className="container-x py-24 text-center text-sm text-muted-foreground">Pedido não encontrado.</div>;
   }
+
+  const pendingOnline = order.payment_method === ONLINE_PAYMENT && order.payment_status === "pendente" && order.status !== "cancelado";
 
   async function download(only) {
     setDownloading(only);
@@ -105,7 +133,8 @@ function OrderPage() {
           <Button variant="outline" onClick={() => download("all")} disabled={Boolean(downloading)} className="gap-1.5">
             {downloading === "all" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Baixar arquivos
           </Button>
-          {settings?.online_payment_enabled && !["aprovado", "reembolsado"].includes(order.payment_status) && order.status !== "cancelado" && (
+          {settings?.online_payment_enabled && !isNewOnlinePayment(order.payment_method) && !(pendingOnline && checking) && !isPickupPaymentOrder(order)
+            && !["aprovado", "reembolsado"].includes(order.payment_status) && order.status !== "cancelado" && (
             <Button onClick={payNow} disabled={paying} className="gap-1.5">
               {paying ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Pagar agora
             </Button>
@@ -113,6 +142,7 @@ function OrderPage() {
         </div>
       </div>
 
+      <p className="mt-5 rounded-xl border border-primary/25 bg-accent/60 p-4 text-sm"><strong>Próximo passo:</strong> {nextOrderStep(order)}</p>
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.5fr_1fr]">
         <div className="space-y-6">
           <section className="rounded-[1.25rem] border border-border bg-card p-6">
@@ -137,9 +167,7 @@ function OrderPage() {
           {photos.length > 0 && (
             <section className="rounded-[1.25rem] border border-border bg-card p-6">
               <h2 className="text-xl">Fotos do pedido</h2>
-              <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4">
-                {photos.map((photo) => <OrderPhoto key={photo.id} photo={photo} />)}
-              </div>
+              <OrderPhotoGallery key={orderId} photos={photos} Photo={OrderPhoto} className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4" />
             </section>
           )}
 
@@ -174,14 +202,33 @@ function OrderPage() {
               </div>
             ) : null}
             <p className="mt-3 text-xs text-muted-foreground">
-              Pagamento: <strong className="text-foreground">{order.payment_status}</strong>
+              Pagamento: <strong className="text-foreground">{order.payment_status === "teste_aprovado" ? "aprovado em homologação" : order.payment_status}</strong>
             </p>
-            {order.payment_method === "retirada" && order.payment_status === "pendente" && <p className="mt-2 text-xs text-muted-foreground">Pedido registrado. Combine o pagamento com a loja; a produção ainda não está liberada.</p>}
+            {isNewOnlinePayment(order.payment_method) && <OnlineProviderPayment order={order} search={search} onUpdate={refetch} />}
+            {pendingOnline && (
+              <div className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs" aria-live="polite">
+                <p className="font-medium">Aguardando confirmação do pagamento</p>
+                <p className="mt-1 text-muted-foreground">
+                  {checking ? "Estamos consultando a confirmação. Se você já pagou, aguarde nesta tela." : "Se você já pagou, atualize o status antes de tentar um novo pagamento."}
+                </p>
+                {!checking && <Button size="sm" variant="outline" className="mt-2" disabled={isFetching} onClick={() => refetch()}>
+                  {isFetching ? "Atualizando…" : "Atualizar status"}
+                </Button>}
+              </div>
+            )}
+            {isPickupPaymentOrder(order) && <p className="mt-1 text-xs text-muted-foreground">{PAYMENT_METHOD_LABELS[order.payment_method]}</p>}
+            {awaitsPickupPayment(order) && (
+              <p className="mt-2 rounded-lg bg-secondary px-3 py-2 text-xs text-foreground">
+                Você paga {formatBRL(order.total)} no balcão quando retirar este pedido.
+              </p>
+            )}
+            {order.payment_method === STORE_PAYMENT && order.payment_status === "pendente" && <p className="mt-2 text-xs text-muted-foreground">Pedido registrado. Combine o pagamento com a loja; a produção ainda não está liberada.</p>}
             {order.fulfillment === "entrega" ? (
               <p className="mt-1 text-xs text-muted-foreground">Entrega: {order.shipping_address}</p>
             ) : (
               <p className="mt-1 text-xs text-muted-foreground">Retirada na loja</p>
             )}
+            {order.fulfillment === "retirada" && <PickupQrCode order={order} />}
             {order.production_deadline_label || order.production_days ? (
               <p className="mt-1 text-xs text-muted-foreground">Prazo de produção: {order.production_deadline_label || `${order.production_days} dia(s) úteis`}</p>
             ) : null}
@@ -209,7 +256,7 @@ function OrderPage() {
             <h2 className="text-lg">Valores</h2>
             <dl className="mt-3 space-y-2 text-sm">
               <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal</dt><dd>{formatBRL(order.subtotal)}</dd></div>
-              {order.discount > 0 && <div className="flex justify-between"><dt className="text-muted-foreground">Desconto</dt><dd>-{formatBRL(order.discount)}</dd></div>}
+              {order.discount > 0 && <div className="flex justify-between"><dt className="text-muted-foreground">Desconto{order.discount_label ? " · " + order.discount_label : ""}</dt><dd>-{formatBRL(order.discount)}</dd></div>}
               <div className="flex justify-between"><dt className="text-muted-foreground">Frete</dt><dd>{formatBRL(order.shipping_cost || 0)}</dd></div>
               <div className="flex justify-between border-t border-border pt-2 font-medium"><dt>Total</dt><dd>{formatBRL(order.total)}</dd></div>
             </dl>
